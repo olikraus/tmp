@@ -96,6 +96,9 @@ void bcp_ClrCube(bcp p, bc c);
 const char *bcp_GetStringFromCube(bcp p, bc c);
 void bcp_SetCubeByString(bcp p, bc c, const char *s);
 void bcp_CopyCube(bcp p, bc dest, bc src);
+int bcp_IsTautologyCube(bcp p, bc c);
+int bcp_IntersectionCube(bcp p, bc r, bc a, bc b);
+int bcp_IsIllegal(bcp p, bc c);
 
 bcl bcp_NewBCL(bcp p);
 void bcp_DeleteBCL(bcp p, bcl l);
@@ -103,6 +106,7 @@ bc bcp_GetBCLCube(bcp p, bcl l, int pos);
 void bcp_ShowBCL(bcp p, bcl l);
 int bcp_AddBCLCube(bcp p, bcl l);
 int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s);
+#define bcp_GetBCLCnt(p, l) ((l)->cnt)
 
 /*============================================================*/
 
@@ -113,10 +117,32 @@ static void print128_num(__m128i var)
     uint16_t val[8];
     memcpy(val, &var, sizeof(val));
     printf("m128i: %04x %04x %04x %04x %04x %04x %04x %04x \n", 
-           val[0], val[1], val[2], val[3], val[4], val[5], 
+           val[0], val[1], 
+           val[2], val[3], 
+           val[4], val[5], 
            val[6], val[7]);
 }
+*/
 
+/*
+static void print128_num(__m128i var)
+{
+    uint8_t val[16];
+    memcpy(val, &var, sizeof(val));
+    printf("m128i: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x \n", 
+           val[0], val[1], 
+           val[2], val[3], 
+           val[4], val[5], 
+           val[6], val[7],
+           val[8], val[9], 
+           val[10], val[11], 
+           val[12], val[13], 
+           val[14], val[15]
+  );
+}
+*/
+
+/*
 static __m128i m128i_get_n_bit_mask(uint16_t val, unsigned bit_pos)
 {
   uint16_t a[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -345,7 +371,8 @@ void bcp_SetCubeByStringPointer(bcp p, bc c,  const char **s)
     if ( **s == '0' ) { v = 1; }
     else if ( **s == '1' ) { v = 2; }
     else if ( **s == '-' ) { v = 3; }
-    else { v = 0; }
+    else if ( **s == 'x' ) { v = 0; }
+    else { v = 3; }
     if ( **s != '\0' && **s != '\r' && **s != '\n' )       // stop looking at further chars if the line/string ends
       (*s)++;
     bcp_SetCubeVar(p, c, i, v);
@@ -376,6 +403,7 @@ int bcp_IsTautologyCube(bcp p, bc c)
   return 1;
 }
 
+
 /*
   calculate intersection of a and b, result is stored in r
   return 0, if there is no intersection
@@ -401,12 +429,33 @@ int bcp_IntersectionCube(bcp p, bc r, bc a, bc b)
     
         Short form: 00? --> x0 --> 00 == 00?
     */    
-    f &= _mm_movemask_epi8(_mm_cmpeq_epi16(_mm_and_si128(_mm_or_si128( rr, _mm_srli_si128(rr,1)), z), z));
+    f &= _mm_movemask_epi8(_mm_cmpeq_epi16(_mm_and_si128(_mm_or_si128( rr, _mm_srai_epi16(rr,1)), z), z));
   }
   if ( f == 0xffff )
     return 1;
   return 0;
 }
+
+/* returns 1, if cube "c" is illegal, return 0 if "c" is not illegal */
+int bcp_IsIllegal(bcp p, bc c)
+{
+  int i, cnt = p->blk_cnt;
+  __m128i z = _mm_loadu_si128(bcp_GetBCLCube(p, p->global_cube_list, 1));
+  __m128i cc;
+  uint16_t f = 0x0ffff;
+  for( i = 0; i < cnt; i++ )
+  {
+    cc = _mm_loadu_si128(c+i);      // load one block
+    //print128_num(cc);
+    //print128_num(_mm_srai_epi16(cc,1));
+    //print128_num(_mm_or_si128( cc, _mm_srai_epi16(cc,1)));
+    f &= _mm_movemask_epi8(_mm_cmpeq_epi16(_mm_and_si128(_mm_or_si128( cc, _mm_srai_epi16(cc,1)), z), z));
+  }
+  if ( f == 0xffff )
+    return 0;
+  return 1;
+}
+
 
 /*
   test, whether "b" is a subset of "a"
@@ -600,17 +649,30 @@ int mainx(void)
 }
 
 char *cubes_string= 
+"x---\n"
 "1100\n"
 "1-0-\n"
+"1x01\n"
+"----\n"
 ;
 
 int main(void)
 {
+  int i;
   bcp p = bcp_New(bcp_GetVarCntFromString(cubes_string));
   bcl l = bcp_NewBCL(p);
   bcp_AddBCLCubesByString(p, l, cubes_string);
   
   bcp_ShowBCL(p, l);
+  for( i = 0; i < bcp_GetBCLCnt(p, l); i++ )
+  {
+    bc c = bcp_GetBCLCube(p, l, i);
+    printf("%s t:%d, illegal:%d\n", 
+      bcp_GetStringFromCube(p, c), 
+      bcp_IsTautologyCube(p, c), 
+      bcp_IsIllegal(p, c) );
+  }
+
   bcp_DeleteBCL(p,  l);
   bcp_Delete(p);  
 }
