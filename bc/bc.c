@@ -243,7 +243,7 @@ bcp bcp_New(size_t var_cnt)
 				4..7:	uint8_t counters for zeros in a list
 				8..11:	uint8_t counters for ones in a list
 			*/
-            for( i = 0; i < 4+4+4; i++ )
+            for( i = 0; i < 4+4+4+1; i++ )
               bcp_AddBCLCube(p, p->global_cube_list);
             if ( p->global_cube_list->cnt == 4 )
             {
@@ -624,54 +624,155 @@ void bcp_AndBCL(bcp p, bc r, bcl l)
   }
 }
 
-void bcp_BuildVariableStatistics(bcp p, bcl l)
+int bcp_GetBestBinateSplitVariable(bcp p, bcl l)
 {
-	int b;		// bit count
 	int i, blk_cnt = p->blk_cnt;
 	int j, list_cnt = l->cnt;
-	bc zero_cnt_cube;
-	bc one_cnt_cube;
-	bc zero_cube;
-	bc current_cube;
-
+	unsigned int max_min_cnt = -1;
+	int max_min_var = -1;
+	
+	bc zero_cnt_cube[4];
+	bc one_cnt_cube[4];
+	
 
 	__m128i c;  // current block from the current cube from the list
 	__m128i t;	// temp block
-	__m128i oc;	// one count
-	__m128i zc;	// zero count
-	__m128i z; // constant zero 
+	__m128i oc0, oc1, oc2, oc3;	// one count
+	__m128i zc0, zc1, zc2, zc3;	// zero count
+	__m128i mc; // mask cube for the lowest bit in each byte
 
+	/* constuct the byte mask: we need the lowest bit of each byte */
+	mc = _mm_setzero_si128();
+	mc = _mm_insert_epi16(mc, 0x0101, 0);
+	mc = _mm_insert_epi16(mc, 0x0101, 1);
+	mc = _mm_insert_epi16(mc, 0x0101, 2);
+	mc = _mm_insert_epi16(mc, 0x0101, 3);
+	mc = _mm_insert_epi16(mc, 0x0101, 4);
+	mc = _mm_insert_epi16(mc, 0x0101, 5);
+	mc = _mm_insert_epi16(mc, 0x0101, 6);
+	mc = _mm_insert_epi16(mc, 0x0101, 7);
 
-	zero_cube = bcp_GetGlobalCube(p, 2);          // global cube 2 has all vars set to zero
-	z = _mm_loadu_si128(zero_cube);
-
-	//for( b = 0; b < 4; b++ )	// there are 4 variables in a bytes
-	b = 0;
+	/* "misuse" the cubes as SIMD storage area for the counters */
+	zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+	zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+	zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+	zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+	
+	one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
+	one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
+	one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
+	one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+	
+	/* loop over the blocks */
+	for( i = 0; i < blk_cnt; i++ )
 	{
-		zero_cnt_cube = bcp_GetGlobalCube(p, 4+b);
-		one_cnt_cube = bcp_GetGlobalCube(p, 8+b);
+		/* load the registers for counting zeros and ones */
+		zc0 = _mm_loadu_si128(zero_cnt_cube[0] + i);
+		zc1 = _mm_loadu_si128(zero_cnt_cube[1] + i);
+		zc2 = _mm_loadu_si128(zero_cnt_cube[2] + i);
+		zc3 = _mm_loadu_si128(zero_cnt_cube[3] + i);
+		oc0 = _mm_loadu_si128(one_cnt_cube[0] + i);
+		oc1 = _mm_loadu_si128(one_cnt_cube[1] + i);
+		oc2 = _mm_loadu_si128(one_cnt_cube[2] + i);
+		oc3 = _mm_loadu_si128(one_cnt_cube[3] + i);
 		
-		/* loop over the blocks */
-		for( i = 0; i < blk_cnt; i++ )
+		for( j = 0; j < list_cnt; j++ )
 		{
-			/* load the registers for counting zeros and ones */
-			zc = _mm_loadu_si128(zero_cnt_cube+i);
-			oc = _mm_loadu_si128(one_cnt_cube+i);
-			for( j = 0; j < list_cnt; j++ )
-			{
-				c = _mm_loadu_si128(bcp_GetBCLCube(p, l, j)+i);
-				t = _mm_and_si128(c, z);
-				zc = _mm_adds_epu8(zc, t);
-				c = _mm_srai_epi16(c,1);
-				t = _mm_and_si128(c, z);
-				oc = _mm_adds_epu8(oc, t);
-			}
+			/*
+				Goal: 
+					Count, how often 01 (zero) and 10 (one) do appear in the list at a specific cube position
+					This means, for a cube with x variables, we will generate 2*x numbers
+					For this count we have to ignore 11 (don't care) values.
+				Assumption:
+					The code 00 (illegal) is assumed to be absent.
+				Idea:
+					Because only code 11, 01 and 10 will be there in the cubes, it will be good enough
+					to count the 0 bits from 01 and 10.
+					Each counter will be 8 bit only (hoping that this is enough) with satuartion at 255 (thanks to SIMD instructions)
+					In order to add or not add the above "0" (from the 01 or 10 code) to the counter, we will just mask and invert the 0 bit.
+				
+				Example:
+					Assume a one variable at bit pos 0/1:
+						xxxxxx10		code for value "one" at bits 0/1
+					this is inverted and masked with one SIMD instruction:
+						00000001		increment value for the counter
+					this value is then added (with sturation) to the "one" counter 
+					if, on the other hand, there would be a don't care or zero, it would look like this:
+						xxxxxx01		code for value "zero" at bits 0/1
+						xxxxxx11		code for value "don't care" at bits 0/1
+					the invert and mask operation for bit 0 will generate a 0 byte in both cases:
+						00000000		increment value for the counter in case of "zero" and "don't care" value
+			*/
+			c = _mm_loadu_si128(bcp_GetBCLCube(p, l, j)+i);
+
+			/* handle variable at bits 0/1 */
+			t = _mm_andnot_si128(c, mc);		// flip the lowerst bit and mask the lowerst bit in each byte: the "10" code for value "one" will become "00000001"
+			oc0 = _mm_adds_epu8(oc0, t);		// sum the "one" value with saturation
+			c = _mm_srai_epi16(c,1);			// shift right to proceed with the "zero" value
+			t = _mm_andnot_si128(c, mc);
+			zc0 = _mm_adds_epu8(zc0, t);
 			
-			/* store the registers for counting zeros and ones */
-			_mm_storeu_si128(zero_cnt_cube+i, zc);
-			_mm_storeu_si128(one_cnt_cube+i, oc);
+			c = _mm_srai_epi16(c,1);			// shift right to process the next variable
+
+			/* handle variable at bits 2/3 */
+			t = _mm_andnot_si128(c, mc);
+			oc1 = _mm_adds_epu8(oc1, t);
+			c = _mm_srai_epi16(c,1);
+			t = _mm_andnot_si128(c, mc);
+			zc1 = _mm_adds_epu8(zc1, t);
+
+			c = _mm_srai_epi16(c,1);
+
+			/* handle variable at bits 4/5 */
+			t = _mm_andnot_si128(c, mc);
+			oc2 = _mm_adds_epu8(oc2, t);
+			c = _mm_srai_epi16(c,1);
+			t = _mm_andnot_si128(c, mc);
+			zc2 = _mm_adds_epu8(zc2, t);
+
+			c = _mm_srai_epi16(c,1);
+
+			/* handle variable at bits 6/7 */
+			t = _mm_andnot_si128(c, mc);
+			oc3 = _mm_adds_epu8(oc3, t);
+			c = _mm_srai_epi16(c,1);
+			t = _mm_andnot_si128(c, mc);
+			zc3 = _mm_adds_epu8(zc3, t);
+		}
+		
+		/* store the registers for counting zeros and ones */
+		_mm_storeu_si128(zero_cnt_cube[0] + i, zc0);
+		_mm_storeu_si128(zero_cnt_cube[1] + i, zc1);
+		_mm_storeu_si128(zero_cnt_cube[2] + i, zc2);
+		_mm_storeu_si128(zero_cnt_cube[3] + i, zc3);
+		
+		_mm_storeu_si128(one_cnt_cube[0] + i, oc0);
+		_mm_storeu_si128(one_cnt_cube[1] + i, oc1);
+		_mm_storeu_si128(one_cnt_cube[2] + i, oc2);
+		_mm_storeu_si128(one_cnt_cube[3] + i, oc3);
+	}
+	
+	/*
+	for( i = 0; i < p->var_cnt; i++ )
+	{
+		int cube_idx = i & 3;
+		int blk_idx = i / 64;
+		int byte_idx = (i & 63)>>2;
+		unsigned one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+		unsigned zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+		
+		unsigned min_cnt = one_cnt > zero_cnt ? zero_cnt : one_cnt;
+		
+		printf("%d: one_cnt=%u zero_cnt=%u\n", i, one_cnt, zero_cnt);
+		
+		if ( max_min_cnt < min_cnt )
+		{
+			max_min_cnt = min_cnt;
+			max_min_var = i;
 		}
 	}
+	*/
+	return max_min_var;
 }
 
 /*============================================================*/
@@ -706,10 +807,10 @@ int mainx(void)
 }
 
 char *cubes_string= 
-"x---\n"
+"1-1-\n"
 "1100\n"
 "1-0-\n"
-"1x01\n"
+"1001\n"
 "----\n"
 ;
 
@@ -730,6 +831,7 @@ int main(void)
       bcp_IsIllegal(p, c) );
   }
 
+  bcp_GetBestBinateSplitVariable(p, l);
   bcp_DeleteBCL(p,  l);
   bcp_Delete(p);  
 }
