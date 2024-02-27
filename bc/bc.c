@@ -3,6 +3,10 @@
   bc.c
   
   boolean cube 
+  
+  Suggested article: R. Rudell "Multiple-Valued Logic Minimization for PLA Synthesis"
+    https://www2.eecs.berkeley.edu/Pubs/TechRpts/1986/734.html
+  This code will only use the binary case (and not the multiple value case) which is partly described in the above article.  
 
   https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#ssetechs=SSE,SSE2&ig_expand=80
 
@@ -93,6 +97,8 @@ void bcp_EndCubeStackFrame(bcp p);
 bc bcp_GetTempCube(bcp p);
 
 void bcp_ClrCube(bcp p, bc c);
+void bcp_SetCubeVar(bcp p, bc c, unsigned var_pos, unsigned value);
+unsigned bcp_GetCubeVar(bcp p, bc c, unsigned var_pos);
 const char *bcp_GetStringFromCube(bcp p, bc c);
 void bcp_SetCubeByString(bcp p, bc c, const char *s);
 void bcp_CopyCube(bcp p, bc dest, bc src);
@@ -104,9 +110,12 @@ bcl bcp_NewBCL(bcp p);
 void bcp_DeleteBCL(bcp p, bcl l);
 bc bcp_GetBCLCube(bcp p, bcl l, int pos);
 void bcp_ShowBCL(bcp p, bcl l);
+void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
+void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
 int bcp_AddBCLCube(bcp p, bcl l);
 int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s);
 #define bcp_GetBCLCnt(p, l) ((l)->cnt)
+int bcp_GetBCLBestBinateSplitVariable(bcp p, bcl l);
 
 /*============================================================*/
 
@@ -124,7 +133,6 @@ static void print128_num(__m128i var)
 }
 */
 
-/*
 static void print128_num(__m128i var)
 {
     uint8_t val[16];
@@ -140,7 +148,6 @@ static void print128_num(__m128i var)
            val[14], val[15]
   );
 }
-*/
 
 /*
 static __m128i m128i_get_n_bit_mask(uint16_t val, unsigned bit_pos)
@@ -245,7 +252,7 @@ bcp bcp_New(size_t var_cnt)
 			*/
             for( i = 0; i < 4+4+4+1; i++ )
               bcp_AddBCLCube(p, p->global_cube_list);
-            if ( p->global_cube_list->cnt == 4 )
+            if ( p->global_cube_list->cnt >= 4 )
             {
               memset(bcp_GetBCLCube(p, p->global_cube_list, 0), 0, p->bytes_per_cube_cnt);  // all vars are illegal
               memset(bcp_GetBCLCube(p, p->global_cube_list, 1), 0x55, p->bytes_per_cube_cnt);  // all vars are zero
@@ -550,6 +557,122 @@ void bcp_ShowBCL(bcp p, bcl l)
   }
 }
 
+/*
+  remove cubes from the list, which are maked as deleted
+  cubes are marked as deletable by 
+    bcp_DoBCLSingleCubeContainment()
+*/
+void bcp_PurgeBCL(bcp p, bcl l)
+{
+  int i = 0;
+  int j = 0;
+  int cnt = l->cnt;
+  
+  while( i < cnt )
+  {
+    if ( l->flags[i] != 0 )
+      break;
+    i++;
+  }
+  j = i;
+  i++;  
+  for(;;)
+  {
+    while( i < cnt )
+    {
+      if ( l->flags[i] == 0 )
+        break;
+      i++;
+    }
+    if ( i >= cnt )
+      break;
+    memcpy((void *)bcp_GetBCLCube(p, l, j), (void *)bcp_GetBCLCube(p, l, i), p->bytes_per_cube_cnt);
+    j++;
+    i++;
+  }
+  l->cnt = j;  
+  memset(l->flags, 0, l->cnt);
+}
+
+/*
+  In the given BCL, ensure, that no cube is part of any other cube
+*/
+void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
+{
+  int i, j;
+  int cnt = l->cnt;
+  bc c;
+  for( i = 0; i < cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      c = bcp_GetBCLCube(p, l, i);
+      for( j = 0; j < cnt; j++ )
+      {
+        if ( l->flags[j] == 0 )
+        {
+          if ( i != j )
+          {
+            /*
+              test, whether "b" is a subset of "a"
+              returns:      
+                1: yes, "b" is a subset of "a"
+                0: no, "b" is not a subset of "a"
+            */
+            if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
+            {
+              l->flags[j] = 1;      // mark the j cube as deleted
+            }            
+          } // j != i
+        } // j cube not deleted
+      } // j loop
+    } // i cube not deleted
+  } // i loop
+  bcp_PurgeBCL(p, l);
+}
+
+
+void bcl_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
+{
+  int i, j;
+  int cnt = l->cnt;
+  unsigned v;
+  bc c;
+  for( i = 0; i < cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      c = bcp_GetBCLCube(p, l, i);
+      v = bcp_GetCubeVar(p, c, var_pos);
+      if ( v != 3 )  // is the variable already don't care for the cofactor variable?
+      {
+        if ( (v | value) == 3 ) // if no, then check if the variable would become don't care
+        {
+          bcp_SetCubeVar(p, c, var_pos, 3);   // yes, variable will become don't care
+          for( j = 0; j < cnt; j++ )
+          {
+            if ( j != i && l->flags[j] == 0  )
+            {
+              /*
+                test, whether "b" is a subset of "a"
+                returns:      
+                  1: yes, "b" is a subset of "a"
+                  0: no, "b" is not a subset of "a"
+              */
+              if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
+              {
+                l->flags[j] = 1;      // mark the j cube as covered (to be deleted)
+              }            
+            }
+          }
+        } // check for "becomes don't care'
+      } // check for not don't care
+    }
+  } // i loop
+  bcp_PurgeBCL(p, l);
+}
+
+
 
 /* add a cube to the cube list and return the position of the new cube */
 int bcp_AddBCLCube(bcp p, bcl l)
@@ -624,11 +747,11 @@ void bcp_AndBCL(bcp p, bc r, bcl l)
   }
 }
 
-int bcp_GetBestBinateSplitVariable(bcp p, bcl l)
+int bcp_GetBCLBestBinateSplitVariable(bcp p, bcl l)
 {
 	int i, blk_cnt = p->blk_cnt;
 	int j, list_cnt = l->cnt;
-	unsigned int max_min_cnt = -1;
+	int max_min_cnt = -1;
 	int max_min_var = -1;
 	
 	bc zero_cnt_cube[4];
@@ -666,15 +789,15 @@ int bcp_GetBestBinateSplitVariable(bcp p, bcl l)
 	/* loop over the blocks */
 	for( i = 0; i < blk_cnt; i++ )
 	{
-		/* load the registers for counting zeros and ones */
-		zc0 = _mm_loadu_si128(zero_cnt_cube[0] + i);
-		zc1 = _mm_loadu_si128(zero_cnt_cube[1] + i);
-		zc2 = _mm_loadu_si128(zero_cnt_cube[2] + i);
-		zc3 = _mm_loadu_si128(zero_cnt_cube[3] + i);
-		oc0 = _mm_loadu_si128(one_cnt_cube[0] + i);
-		oc1 = _mm_loadu_si128(one_cnt_cube[1] + i);
-		oc2 = _mm_loadu_si128(one_cnt_cube[2] + i);
-		oc3 = _mm_loadu_si128(one_cnt_cube[3] + i);
+		/* clear all the conters for the current block */
+		zc0 = _mm_setzero_si128();
+		zc1 = _mm_setzero_si128();
+		zc2 = _mm_setzero_si128();
+		zc3 = _mm_setzero_si128();
+		oc0 = _mm_setzero_si128();
+		oc1 = _mm_setzero_si128();
+		oc2 = _mm_setzero_si128();
+		oc3 = _mm_setzero_si128();
 		
 		for( j = 0; j < list_cnt; j++ )
 		{
@@ -704,7 +827,6 @@ int bcp_GetBestBinateSplitVariable(bcp p, bcl l)
 						00000000		increment value for the counter in case of "zero" and "don't care" value
 			*/
 			c = _mm_loadu_si128(bcp_GetBCLCube(p, l, j)+i);
-
 			/* handle variable at bits 0/1 */
 			t = _mm_andnot_si128(c, mc);		// flip the lowerst bit and mask the lowerst bit in each byte: the "10" code for value "one" will become "00000001"
 			oc0 = _mm_adds_epu8(oc0, t);		// sum the "one" value with saturation
@@ -752,18 +874,23 @@ int bcp_GetBestBinateSplitVariable(bcp p, bcl l)
 		_mm_storeu_si128(one_cnt_cube[3] + i, oc3);
 	}
 	
-	/*
+        /* 
+          based on the calculated number of "one" and "zero" values, find a variable which fits best for splitting.
+          According to R. Rudell in "Multiple-Valued Logic Minimization for PLA Synthesis" this should be the
+          variable with the highest value of one_cnt + zero_cnt
+        */
+        
 	for( i = 0; i < p->var_cnt; i++ )
 	{
 		int cube_idx = i & 3;
 		int blk_idx = i / 64;
 		int byte_idx = (i & 63)>>2;
-		unsigned one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
-		unsigned zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+		int one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+		int zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
 		
-		unsigned min_cnt = one_cnt > zero_cnt ? zero_cnt : one_cnt;
+		int min_cnt = one_cnt > zero_cnt ? zero_cnt : one_cnt;
 		
-		printf("%d: one_cnt=%u zero_cnt=%u\n", i, one_cnt, zero_cnt);
+		// printf("%d: one_cnt=%u zero_cnt=%u\n", i, one_cnt, zero_cnt);
 		
 		if ( max_min_cnt < min_cnt )
 		{
@@ -771,8 +898,15 @@ int bcp_GetBestBinateSplitVariable(bcp p, bcl l)
 			max_min_var = i;
 		}
 	}
-	*/
+        //printf("best variable for split: %d\n", max_min_var);
 	return max_min_var;
+}
+
+
+
+int bcl_IsBCLTautology(bcp p, bcl l)
+{
+  return 0;
 }
 
 /*============================================================*/
@@ -807,11 +941,12 @@ int mainx(void)
 }
 
 char *cubes_string= 
-"1-1-\n"
-"1100\n"
-"1-0-\n"
-"1001\n"
-"----\n"
+"1-1-11\n"
+"110011\n"
+"1-0-10\n"
+"1001-0\n"
+"------\n"
+"------\n"
 ;
 
 int main(void)
@@ -820,6 +955,7 @@ int main(void)
   bcp p = bcp_New(bcp_GetVarCntFromString(cubes_string));
   bcl l = bcp_NewBCL(p);
   bcp_AddBCLCubesByString(p, l, cubes_string);
+  
   
   bcp_ShowBCL(p, l);
   for( i = 0; i < bcp_GetBCLCnt(p, l); i++ )
@@ -831,7 +967,11 @@ int main(void)
       bcp_IsIllegal(p, c) );
   }
 
-  bcp_GetBestBinateSplitVariable(p, l);
+  bcp_GetBCLBestBinateSplitVariable(p, l);
+  // bcl_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
+
+  bcp_DoBCLSingleCubeContainment(p, l);
+  bcp_ShowBCL(p, l);
   bcp_DeleteBCL(p,  l);
   bcp_Delete(p);  
 }
