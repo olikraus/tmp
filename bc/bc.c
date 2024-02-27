@@ -199,13 +199,15 @@ static __m128i m128i_get_n_bit_mask(uint16_t val, unsigned bit_pos)
 
 int bcp_GetVarCntFromString(const char *s)
 {
-  int cnt;
+  int cnt = 0;
   for(;;)
   {
     while( *s == ' ' || *s == '\t' )            // skip white space
       s++;
     if ( *s == '\0' || *s == '\r' || *s == '\n' )       // stop looking at further chars if the line/string ends
+	{
       return cnt;
+	}
     s++;
     cnt++;
   }
