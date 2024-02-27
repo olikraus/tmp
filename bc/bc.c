@@ -238,7 +238,12 @@ bcp bcp_New(size_t var_cnt)
           if ( p->global_cube_list != NULL )
           {
             int i;
-            for( i = 0; i < 4; i++ )
+			/*
+				0..3:	constant cubes for all illegal, all zero, all one and all don't care
+				4..7:	uint8_t counters for zeros in a list
+				8..11:	uint8_t counters for ones in a list
+			*/
+            for( i = 0; i < 4+4+4; i++ )
               bcp_AddBCLCube(p, p->global_cube_list);
             if ( p->global_cube_list->cnt == 4 )
             {
@@ -617,6 +622,56 @@ void bcp_AndBCL(bcp p, bc r, bcl l)
     }
     _mm_storeu_si128(r+i, m);
   }
+}
+
+void bcp_BuildVariableStatistics(bcp p, bcl l)
+{
+	int b;		// bit count
+	int i, blk_cnt = p->blk_cnt;
+	int j, list_cnt = l->cnt;
+	bc zero_cnt_cube;
+	bc one_cnt_cube;
+	bc zero_cube;
+	bc current_cube;
+
+
+	__m128i c;  // current block from the current cube from the list
+	__m128i t;	// temp block
+	__m128i oc;	// one count
+	__m128i zc;	// zero count
+	__m128i z; // constant zero 
+
+
+	zero_cube = bcp_GetGlobalCube(p, 2);          // global cube 2 has all vars set to zero
+	z = _mm_loadu_si128(zero_cube);
+
+	//for( b = 0; b < 4; b++ )	// there are 4 variables in a bytes
+	b = 0;
+	{
+		zero_cnt_cube = bcp_GetGlobalCube(p, 4+b);
+		one_cnt_cube = bcp_GetGlobalCube(p, 8+b);
+		
+		/* loop over the blocks */
+		for( i = 0; i < blk_cnt; i++ )
+		{
+			/* load the registers for counting zeros and ones */
+			zc = _mm_loadu_si128(zero_cnt_cube+i);
+			oc = _mm_loadu_si128(one_cnt_cube+i);
+			for( j = 0; j < list_cnt; j++ )
+			{
+				c = _mm_loadu_si128(bcp_GetBCLCube(p, l, j)+i);
+				t = _mm_and_si128(c, z);
+				zc = _mm_adds_epu8(zc, t);
+				c = _mm_srai_epi16(c,1);
+				t = _mm_and_si128(c, z);
+				oc = _mm_adds_epu8(oc, t);
+			}
+			
+			/* store the registers for counting zeros and ones */
+			_mm_storeu_si128(zero_cnt_cube+i, zc);
+			_mm_storeu_si128(one_cnt_cube+i, oc);
+		}
+	}
 }
 
 /*============================================================*/
