@@ -1,4 +1,4 @@
-CFLAGS = -g -Wall
+CFLAGS = -g -pg -Wall
 
 SRC = bc.c
 
@@ -8,5 +8,5 @@ bc: $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 clean:	
-	-rm $(OBJ) table2html
+	-rm $(OBJ) bc
 
