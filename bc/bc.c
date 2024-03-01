@@ -1045,24 +1045,61 @@ int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l)
   returns the binate variable for which the number of one's plus number of zero's is max under the condition, that both number of once's and zero's are >0 
 
 */
-int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
+
+int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l)
 {
   int max_sum_cnt = -1;
-  int max_sum_var2 = -1;
-  
-  /*
   int max_sum_var = -1;
   int cube_idx;
   int blk_idx;
   int byte_idx;
   int one_cnt;
   int zero_cnt;
-  */
   
-  int i, b;
+  int i;
   
-  //int j, oc, zc;
+  bc zero_cnt_cube[4];
+  bc one_cnt_cube[4];
 
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+
+  
+  max_sum_cnt = -1;
+  max_sum_var = -1;
+  for( i = 0; i < p->var_cnt; i++ )
+  {
+          cube_idx = i & 3;
+          blk_idx = i / 64;
+          byte_idx = (i & 63)>>2;
+          one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+          zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+          if ( one_cnt > 0 && zero_cnt > 0 )
+          {
+            if ( max_sum_cnt < (one_cnt + zero_cnt) )
+            {
+                    max_sum_cnt = one_cnt + zero_cnt;
+                    max_sum_var = i;
+            }
+          }
+  }  
+  return max_sum_var;
+}
+
+
+int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
+{
+  int max_sum_cnt = -1;
+  int max_sum_var = -1;
+  int i, b;
   __m128i c;
   __m128i z;
   __m128i o;
@@ -1098,29 +1135,6 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
     
       for( i = 0; i < 4; i++ )
       {
-        /*
-        m_idx[0] = 0+i;
-        m_idx[1] = 4+i;
-        m_idx[2] = 8+i;
-        m_idx[3] = 12+i;
-        
-        m_idx[4] = 16+i;
-        m_idx[5] = 20+i;
-        m_idx[6] = 24+i;
-        m_idx[7] = 28+i;
-
-        m_idx[8] = 32+i;
-        m_idx[9] = 36+i;
-        m_idx[10] = 40+i;
-        m_idx[11] = 44+i;
-
-        m_idx[12] = 48+i;
-        m_idx[13] = 52+i;
-        m_idx[14] = 56+i;
-        m_idx[15] = 60+i;
-        */
-        
-        //c_idx = _mm_loadu_si128((__m128i *)m_idx);
         z = _mm_loadu_si128(zero_cnt_cube[i]+b);
         o = _mm_loadu_si128(one_cnt_cube[i]+b);
         
@@ -1147,34 +1161,12 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
           if ( max_sum_cnt < m_max[i] )
           {
             max_sum_cnt = m_max[i];
-            max_sum_var2 = m_idx[i] + b*p->vars_per_blk_cnt;
+            max_sum_var = m_idx[i] + b*p->vars_per_blk_cnt;
           }
   }
   
-  /*
-  max_sum_cnt = -1;
-  max_sum_var = -1;
-  for( i = 0; i < p->var_cnt; i++ )
-  {
-          cube_idx = i & 3;
-          blk_idx = i / 64;
-          byte_idx = (i & 63)>>2;
-          one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
-          zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
-          if ( one_cnt > 0 && zero_cnt > 0 )
-          {
-            if ( max_sum_cnt < (one_cnt + zero_cnt) )
-            {
-                    max_sum_cnt = one_cnt + zero_cnt;
-                    max_sum_var = i;
-            }
-          }
-  }  
-  //printf("max_sum_var=%d max_sum_var2=%d\n", max_sum_var, max_sum_var2);
-  assert(max_sum_var2 == max_sum_var);
-  */
   
-  return max_sum_var2;
+  return max_sum_var;
 }
 
 int bcp_IsBCLTautology(bcp p, bcl l)
@@ -1182,6 +1174,8 @@ int bcp_IsBCLTautology(bcp p, bcl l)
   int var_pos;
   bcp_CalcBCLBinateSplitVariableTable(p, l);
   //var_pos = bcp_GetBCLBalancedBinateSplitVariable(p, l);
+  //var_pos = bcp_GetBCLMaxBinateSplitVariableSimple(p, l);
+
   var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
   if ( var_pos < 0 )
   {
@@ -1335,7 +1329,7 @@ int main(void)
   bcp_DeleteBCL(p,  l);
   
   //l = bcp_NewBCLWithRandomTautology(p, 244);
-  l = bcp_NewBCLWithRandomTautology(p, 32);
+  l = bcp_NewBCLWithRandomTautology(p, 34);
   bcp_ShowBCL(p, l);
   printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
   bcp_DeleteBCL(p,  l);
