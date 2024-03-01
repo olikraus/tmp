@@ -99,7 +99,10 @@ bc bcp_GetTempCube(bcp p);
 
 void bcp_ClrCube(bcp p, bc c);
 void bcp_SetCubeVar(bcp p, bc c, unsigned var_pos, unsigned value);
-unsigned bcp_GetCubeVar(bcp p, bc c, unsigned var_pos);
+//unsigned bcp_GetCubeVar(bcp p, bc c, unsigned var_pos);
+#define bcp_GetCubeVar(p, c, var_pos) \
+  ((((uint16_t *)(c))[(var_pos)/8] >> (((var_pos)&7)*2)) & 3)
+
 const char *bcp_GetStringFromCube(bcp p, bc c);
 void bcp_SetCubeByString(bcp p, bc c, const char *s);
 void bcp_CopyCube(bcp p, bc dest, bc src);
@@ -110,17 +113,21 @@ int bcp_IsIllegal(bcp p, bc c);
 bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
 void bcp_DeleteBCL(bcp p, bcl l);
-bc bcp_GetBCLCube(bcp p, bcl l, int pos);
+//bc bcp_GetBCLCube(bcp p, bcl l, int pos);
+#define bcp_GetBCLCube(p, l, pos) \
+  (bc)(((uint8_t *)((l)->list)) + (pos) * (p)->bytes_per_cube_cnt)
 void bcp_ShowBCL(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
-void bcl_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value);  // calculate cofactor for a list, called by "bcp_NewBCLCofacter"
+void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value);  // calculate cofactor for a list, called by "bcp_NewBCLCofacter"
 bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value);         // create a new list, which is the cofactor from "l"
 int bcp_AddBCLCube(bcp p, bcl l);
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c);
 int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s);
 #define bcp_GetBCLCnt(p, l) ((l)->cnt)
-int bcp_GetBCLBestBinateSplitVariable(bcp p, bcl l);
+void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l);
+int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l);
+int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
 
 
 /*============================================================*/
@@ -354,11 +361,15 @@ void bcp_SetCubeVar(bcp p, bc c, unsigned var_pos, unsigned value)
   ptr[idx] |= value  << ((var_pos&7)*2);
 }
 
+/*
 unsigned bcp_GetCubeVar(bcp p, bc c, unsigned var_pos)
 {
-  uint16_t *ptr = (uint16_t *)c;
-  return (ptr[var_pos/8] >> ((var_pos&7)*2)) & 3;
+  //uint16_t *ptr = (uint16_t *)c;
+  return (((uint16_t *)c)[var_pos/8] >> ((var_pos&7)*2)) & 3;
 }
+#define bcp_GetCubeVar(p, c, var_pos) \
+  ((((uint16_t *)(c))[(var_pos)/8] >> (((var_pos)&7)*2)) & 3)
+*/
 
 const char *bcp_GetStringFromCube(bcp p, bc c)
 {
@@ -575,10 +586,12 @@ int bcp_ExtendBCL(bcp p, bcl l)
   return 1;
 }
 
+/*
 bc bcp_GetBCLCube(bcp p, bcl l, int pos)
 {
   return (bc)(((uint8_t *)(l->list)) + pos * p->bytes_per_cube_cnt);
 }
+*/
 
 void bcp_ShowBCL(bcp p, bcl l)
 {
@@ -669,12 +682,17 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   "value" must be either 1 (zero) or 2 (one)
 
 */
-void bcl_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
+void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
 {
   int i, j;
   int cnt = l->cnt;
   unsigned v;
   bc c;
+  
+  assert(value == 1 || value == 2);
+  
+  //printf("bcp_DoBCLOneVariableCofactor pre var_pos=%d value=%d\n", var_pos, value);
+  //bcp_ShowBCL(p, l);
   for( i = 0; i < cnt; i++ )
   {
     if ( l->flags[i] == 0 )
@@ -707,6 +725,9 @@ void bcl_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value
     }
   } // i loop
   bcp_PurgeBCL(p, l);
+  
+  //printf("bcp_DoBCLOneVariableCofactor post\n");
+  //bcp_ShowBCL(p, l);
 }
 
 bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value)
@@ -714,7 +735,7 @@ bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value)
   bcl n = bcp_NewBCLByBCL(p, l);
   if ( n == NULL )
     return NULL;
-  bcl_DoBCLOneVariableCofactor(p, n, var_pos, value);
+  bcp_DoBCLOneVariableCofactor(p, n, var_pos, value);
   return n;
 }
 
@@ -804,12 +825,11 @@ void bcp_AndBCL(bcp p, bc r, bcl l)
   }
 }
 
-int bcp_GetBCLBestBinateSplitVariable(bcp p, bcl l)
+
+void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 {
 	int i, blk_cnt = p->blk_cnt;
 	int j, list_cnt = l->cnt;
-	int max_min_cnt = -1;
-	int max_min_var = -1;
 	
 	bc zero_cnt_cube[4];
 	bc one_cnt_cube[4];
@@ -937,40 +957,173 @@ int bcp_GetBCLBestBinateSplitVariable(bcp p, bcl l)
           variable with the highest value of one_cnt + zero_cnt
         */
         
-	for( i = 0; i < p->var_cnt; i++ )
-	{
-		int cube_idx = i & 3;
-		int blk_idx = i / 64;
-		int byte_idx = (i & 63)>>2;
-		int one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
-		int zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
-		
-		int min_cnt = one_cnt > zero_cnt ? zero_cnt : one_cnt;
-		
-		// printf("%d: one_cnt=%u zero_cnt=%u\n", i, one_cnt, zero_cnt);
-                /* if min_cnt is zero, then there are only "ones" and "don't cares" or "zero" and "don't case". This is usually called unate in that variable */
+}
+
+/*
+  Precondition: call to 
+    void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)  
+
+  returns the binate variable for which the minimum of one's and zero's is max
+*/
+int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l)
+{
+  int max_min_cnt = -1;
+  int max_min_var = -1;
+  
+  int cube_idx;
+  int blk_idx;
+  int byte_idx;
+  int one_cnt;
+  int zero_cnt;
+  int min_cnt;
+  
+  int i;
+  
+  //int j, oc, zc;
+  
+  bc zero_cnt_cube[4];
+  bc one_cnt_cube[4];
+
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+  
+  /*
+  for( i = 0; i < p->blk_cnt; i++ )
+  {
+    
+  }
+  */
+  
+  for( i = 0; i < p->var_cnt; i++ )
+  {
+          cube_idx = i & 3;
+          blk_idx = i / 64;
+          byte_idx = (i & 63)>>2;
+          one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+          zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+    
+          /*
+          oc = 0;
+          zc = 0;
+          for( j = 0; j < l->cnt; j++ )
+          {
+            int value = bcp_GetCubeVar(p, bcp_GetBCLCube(p, l, j), i);
+            if ( value == 1 ) zc++;
+            else if ( value==2) oc++;
+          }
+          assert( one_cnt == oc );
+          assert( zero_cnt == zc );
+          */
           
-                if ( min_cnt > 0 )
-                {
-                  if ( max_min_cnt < min_cnt )
-                  {
-                          max_min_cnt = min_cnt;
-                          max_min_var = i;
-                  }
-                }
-	}
-        
-        /* max_min_var is < 0, then the complete BCL is unate in all variables */
-        
-        //printf("best variable for split: %d\n", max_min_var);
-	return max_min_var;
+          min_cnt = one_cnt > zero_cnt ? zero_cnt : one_cnt;
+          
+          // printf("%d: one_cnt=%u zero_cnt=%u\n", i, one_cnt, zero_cnt);
+          /* if min_cnt is zero, then there are only "ones" and "don't cares" or "zero" and "don't case". This is usually called unate in that variable */
+    
+          if ( min_cnt > 0 )
+          {
+            if ( max_min_cnt < min_cnt )
+            {
+                    max_min_cnt = min_cnt;
+                    max_min_var = i;
+            }
+          }
+  }
+  
+  /* max_min_var is < 0, then the complete BCL is unate in all variables */
+  
+  //printf("best variable for split: %d\n", max_min_var);
+  return max_min_var;
 }
 
 
+/*
+  Precondition: call to 
+    void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)  
+
+  returns the binate variable for which the number of one's plus number of zero's is max under the condition, that both number of once's and zero's are >0 
+
+*/
+int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
+{
+  int max_sum_cnt = -1;
+  int max_sum_var = -1;
+  
+  int cube_idx;
+  int blk_idx;
+  int byte_idx;
+  int one_cnt;
+  int zero_cnt;
+  
+  int i;
+  
+  //int j, oc, zc;
+  
+  bc zero_cnt_cube[4];
+  bc one_cnt_cube[4];
+
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+  
+  for( i = 0; i < p->var_cnt; i++ )
+  {
+          cube_idx = i & 3;
+          blk_idx = i / 64;
+          byte_idx = (i & 63)>>2;
+          one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+          zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+    
+          /*
+          oc = 0;
+          zc = 0;
+          for( j = 0; j < l->cnt; j++ )
+          {
+            int value = bcp_GetCubeVar(p, bcp_GetBCLCube(p, l, j), i);
+            if ( value == 1 ) zc++;
+            else if ( value==2) oc++;
+          }
+          assert( one_cnt == oc );
+          assert( zero_cnt == zc );
+          */
+          
+          if ( one_cnt > 0 && zero_cnt > 0 )
+          {
+            if ( max_sum_cnt < (one_cnt + zero_cnt) )
+            {
+                    max_sum_cnt = one_cnt + zero_cnt;
+                    max_sum_var = i;
+            }
+          }
+  }
+  
+  /* max_min_var is < 0, then the complete BCL is unate in all variables */
+  
+  //printf("best variable for split: %d\n", max_min_var);
+  return max_sum_var;
+}
 
 int bcp_IsBCLTautology(bcp p, bcl l)
 {
-  int var_pos = bcp_GetBCLBestBinateSplitVariable(p, l);
+  int var_pos;
+  bcp_CalcBCLBinateSplitVariableTable(p, l);
+  //var_pos = bcp_GetBCLBalancedBinateSplitVariable(p, l);
+  var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
   if ( var_pos < 0 )
   {
     int i, cnt = l->cnt;
@@ -981,17 +1134,31 @@ int bcp_IsBCLTautology(bcp p, bcl l)
     }
     return 0;
   }
+  else
+  {
+    //printf("split %d\n", var_pos);
+  }
+  bcl f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
   bcl f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
-  bcl f3 = bcp_NewBCLCofacter(p, l, var_pos, 3);
+  assert( f1 != NULL );
   assert( f2 != NULL );
-  assert( f3 != NULL );
+
+  //bcp_DoBCLSingleCubeContainment(p, f1);
+  //bcp_DoBCLSingleCubeContainment(p, f2);
+
+  /*
+  printf("f1:\n");
+  bcp_ShowBCL(p, f1);
+  printf("f2:\n");
+  bcp_ShowBCL(p, f2);
+  */
   
+  if ( bcp_IsBCLTautology(p, f1) == 0 )
+    return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
   if ( bcp_IsBCLTautology(p, f2) == 0 )
-    return bcp_DeleteBCL(p,  f2), bcp_DeleteBCL(p,  f3), 0;
-  if ( bcp_IsBCLTautology(p, f3) == 0 )
-    return bcp_DeleteBCL(p,  f2), bcp_DeleteBCL(p,  f3), 0;
+    return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
   
-  return bcp_DeleteBCL(p,  f2), bcp_DeleteBCL(p,  f3), 1;
+  return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
 }
 
 /*============================================================*/
@@ -1082,8 +1249,8 @@ int mainy(void)
       bcp_IsIllegal(p, c) );
   }
 
-  bcp_GetBCLBestBinateSplitVariable(p, l);
-  // bcl_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
+  bcp_GetBCLBalancedBinateSplitVariable(p, l);
+  // bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
 
   bcp_DoBCLSingleCubeContainment(p, l);
   bcp_ShowBCL(p, l);
@@ -1104,11 +1271,12 @@ int main(void)
   bcp p = bcp_New(bcp_GetVarCntFromString(s));
   bcl l = bcp_NewBCL(p);
   bcp_AddBCLCubesByString(p, l, s);
-  bcp_ShowBCL(p, l);
-  printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
+  //bcp_ShowBCL(p, l);
+  //printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
   bcp_DeleteBCL(p,  l);
   
-  l = bcp_NewBCLWithRandomTautology(p, 48);
+  //l = bcp_NewBCLWithRandomTautology(p, 244);
+  l = bcp_NewBCLWithRandomTautology(p, 32);
   bcp_ShowBCL(p, l);
   printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
   bcp_DeleteBCL(p,  l);
