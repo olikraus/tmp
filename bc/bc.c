@@ -995,13 +995,6 @@ int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l)
   one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
   one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
   
-  /*
-  for( i = 0; i < p->blk_cnt; i++ )
-  {
-    
-  }
-  */
-  
   for( i = 0; i < p->var_cnt; i++ )
   {
           cube_idx = i & 3;
@@ -1055,17 +1048,35 @@ int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l)
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
 {
   int max_sum_cnt = -1;
-  int max_sum_var = -1;
+  int max_sum_var2 = -1;
   
+  /*
+  int max_sum_var = -1;
   int cube_idx;
   int blk_idx;
   int byte_idx;
   int one_cnt;
   int zero_cnt;
+  */
   
-  int i;
+  int i, b;
   
   //int j, oc, zc;
+
+  __m128i c;
+  __m128i z;
+  __m128i o;
+  
+  __m128i c_cmp = _mm_setzero_si128();
+  __m128i c_max = _mm_setzero_si128();
+  __m128i c_idx = _mm_setzero_si128();
+  __m128i c_max_idx = _mm_setzero_si128();
+  
+  uint8_t m_base_idx[16] = { 0, 4, 8, 12,  16, 20, 24, 28,  32, 36, 40, 44,  48, 52, 56, 60 };
+  uint8_t m_base_inc[16] = { 1, 1, 1, 1,   1, 1, 1, 1,   1, 1, 1, 1,   1, 1, 1, 1 };
+  
+  uint8_t m_idx[16];
+  uint8_t m_max[16];
   
   bc zero_cnt_cube[4];
   bc one_cnt_cube[4];
@@ -1080,7 +1091,69 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
   one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
   one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
   one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+
+  for( b = 0; b < p->blk_cnt; b++ )
+  {
+      c_idx = _mm_loadu_si128((__m128i *)m_base_idx);
+    
+      for( i = 0; i < 4; i++ )
+      {
+        /*
+        m_idx[0] = 0+i;
+        m_idx[1] = 4+i;
+        m_idx[2] = 8+i;
+        m_idx[3] = 12+i;
+        
+        m_idx[4] = 16+i;
+        m_idx[5] = 20+i;
+        m_idx[6] = 24+i;
+        m_idx[7] = 28+i;
+
+        m_idx[8] = 32+i;
+        m_idx[9] = 36+i;
+        m_idx[10] = 40+i;
+        m_idx[11] = 44+i;
+
+        m_idx[12] = 48+i;
+        m_idx[13] = 52+i;
+        m_idx[14] = 56+i;
+        m_idx[15] = 60+i;
+        */
+        
+        //c_idx = _mm_loadu_si128((__m128i *)m_idx);
+        z = _mm_loadu_si128(zero_cnt_cube[i]+b);
+        o = _mm_loadu_si128(one_cnt_cube[i]+b);
+        
+        // because we don't want any index on unate variables, we clear both counts if one count is zero
+        c = _mm_cmpeq_epi8(z, _mm_setzero_si128());     // check for zero count of zeros
+        o = _mm_andnot_si128 (c, o);                                    // and clear the one count if the zero count is zero
+        c = _mm_cmpeq_epi8(o, _mm_setzero_si128());     // check for zero count of ones
+        z = _mm_andnot_si128 (c, z);                                    // and clear the zero count if the one count is zero
+        
+        // at this point either both o and z are zero or both are not zero        
+        // now, calculate the sum of both counts and store the sum in z, o is not required any more
+        z = _mm_add_epi8(z, o);
+        c_cmp = _mm_cmplt_epi8( c_max, z );
+        c_max = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max), _mm_and_si128(c_cmp, z) );                        // update max value if required
+        c_max_idx = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max_idx), _mm_and_si128(c_cmp, c_idx) );    // update index value if required        
+        
+        c_idx = _mm_add_epi8(c_idx, _mm_loadu_si128((__m128i *)m_base_inc));
+      }
+      
+      _mm_storeu_si128( (__m128i *)m_max, c_max );
+      _mm_storeu_si128( (__m128i *)m_idx, c_max_idx );
+      for( i = 0; i < 16; i++ )
+        if ( m_max[i] > 0 )
+          if ( max_sum_cnt < m_max[i] )
+          {
+            max_sum_cnt = m_max[i];
+            max_sum_var2 = m_idx[i] + b*p->vars_per_blk_cnt;
+          }
+  }
   
+  /*
+  max_sum_cnt = -1;
+  max_sum_var = -1;
   for( i = 0; i < p->var_cnt; i++ )
   {
           cube_idx = i & 3;
@@ -1088,20 +1161,6 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
           byte_idx = (i & 63)>>2;
           one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
           zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
-    
-          /*
-          oc = 0;
-          zc = 0;
-          for( j = 0; j < l->cnt; j++ )
-          {
-            int value = bcp_GetCubeVar(p, bcp_GetBCLCube(p, l, j), i);
-            if ( value == 1 ) zc++;
-            else if ( value==2) oc++;
-          }
-          assert( one_cnt == oc );
-          assert( zero_cnt == zc );
-          */
-          
           if ( one_cnt > 0 && zero_cnt > 0 )
           {
             if ( max_sum_cnt < (one_cnt + zero_cnt) )
@@ -1110,12 +1169,12 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
                     max_sum_var = i;
             }
           }
-  }
+  }  
+  //printf("max_sum_var=%d max_sum_var2=%d\n", max_sum_var, max_sum_var2);
+  assert(max_sum_var2 == max_sum_var);
+  */
   
-  /* max_min_var is < 0, then the complete BCL is unate in all variables */
-  
-  //printf("best variable for split: %d\n", max_min_var);
-  return max_sum_var;
+  return max_sum_var2;
 }
 
 int bcp_IsBCLTautology(bcp p, bcl l)

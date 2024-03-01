@@ -1,4 +1,4 @@
-CFLAGS = -g -pg -Wall
+CFLAGS = -O -pg -Wall
 
 SRC = bc.c
 
