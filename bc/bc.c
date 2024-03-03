@@ -91,7 +91,9 @@ int bcp_GetVarCntFromString(const char *s);
 
 bcp bcp_New(size_t var_cnt);
 void bcp_Delete(bcp p);
-bc bcp_GetGlobalCube(bcp p, int pos);
+//bc bcp_GetGlobalCube(bcp p, int pos);
+#define bcp_GetGlobalCube(p, pos) \
+  bcp_GetBCLCube((p), (p)->global_cube_list, (pos))  
 void bcp_CopyGlobalCube(bcp p, bc r, int pos);
 void bcp_StartCubeStackFrame(bcp p);
 void bcp_EndCubeStackFrame(bcp p);
@@ -107,11 +109,12 @@ const char *bcp_GetStringFromCube(bcp p, bc c);
 void bcp_SetCubeByString(bcp p, bc c, const char *s);
 void bcp_CopyCube(bcp p, bc dest, bc src);
 int bcp_IsTautologyCube(bcp p, bc c);
-int bcp_IntersectionCube(bcp p, bc r, bc a, bc b);
+int bcp_IntersectionCube(bcp p, bc r, bc a, bc b); // returns 0, if there is no intersection
 int bcp_IsIllegal(bcp p, bc c);
 
 bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
+int bcp_CopyBCL(bcp p, bcl a, bcl b);
 void bcp_DeleteBCL(bcp p, bcl l);
 //bc bcp_GetBCLCube(bcp p, bcl l, int pos);
 #define bcp_GetBCLCube(p, l, pos) \
@@ -119,15 +122,25 @@ void bcp_DeleteBCL(bcp p, bcl l);
 void bcp_ShowBCL(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
+void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
+void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
+
+void bcp_SubtractBCL(bcp p, bcl a, bcl b);
+int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b);
+int bcp_IntersectionBCL(bcp p, bcl a, bcl b);
+
 void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value);  // calculate cofactor for a list, called by "bcp_NewBCLCofacter"
 bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value);         // create a new list, which is the cofactor from "l"
 int bcp_AddBCLCube(bcp p, bcl l);
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c);
+int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b);
 int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s);
 #define bcp_GetBCLCnt(p, l) ((l)->cnt)
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l);
 int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l);
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
+int bcp_IsBCLUnate(bcp p);
+
 
 
 /*============================================================*/
@@ -294,10 +307,14 @@ void bcp_Delete(bcp p)
   free(p);
 }
 
+/*
 bc bcp_GetGlobalCube(bcp p, int pos)
 {
   return bcp_GetBCLCube(p, p->global_cube_list, pos);  
 }
+#define bcp_GetGlobalCube(p, pos) \
+  bcp_GetBCLCube((p), (p)->global_cube_list, (pos))  
+*/
 
 /* copy global cube at pos to cube provided in "r" */
 void bcp_CopyGlobalCube(bcp p, bc r, int pos)
@@ -555,6 +572,41 @@ bcl bcp_NewBCLByBCL(bcp p, bcl l)
   return NULL;
 }
 
+/* let a be a copy of b: copy content from bcl b into bcl a */
+int bcp_CopyBCL(bcp p, bcl a, bcl b)
+{
+  if ( a->max < b->cnt )
+  {
+    __m128i *list;
+    uint8_t *flags;
+    if ( a->list == NULL )
+      list = (__m128i *)malloc(b->cnt*p->bytes_per_cube_cnt);
+    else
+      list = (__m128i *)realloc(a->list, b->cnt*p->bytes_per_cube_cnt);
+    if ( list == NULL )
+      return 0;
+    a->list = list;
+    if ( a->flags == NULL )
+      flags = (uint8_t *)malloc(b->cnt*sizeof(uint8_t));
+    else
+      flags = (uint8_t *)realloc(a->flags, b->cnt*sizeof(uint8_t));
+    if ( flags == 0 )
+      return 0;
+    a->flags = flags;
+    a->max = b->cnt;
+  }
+  a->cnt = b->cnt;
+  memcpy(a->list, b->list, a->cnt*p->bytes_per_cube_cnt);
+  memcpy(a->flags, b->flags, a->cnt*sizeof(uint8_t));
+  return 1;
+}
+
+void bcp_ClearBCL(bcp p, bcl l)
+{
+  l->cnt = 0;
+}
+
+
 void bcp_DeleteBCL(bcp p, bcl l)
 {
   if ( l->list != NULL )
@@ -580,6 +632,8 @@ int bcp_ExtendBCL(bcp p, bcl l)
     flags = (uint8_t *)malloc(BCL_EXTEND*sizeof(uint8_t));
   else
     flags = (uint8_t *)realloc(l->flags, (BCL_EXTEND+l->max)*sizeof(uint8_t));
+  if ( flags == 0 )
+    return 0;
   l->flags = flags;
   
   l->max += BCL_EXTEND;
@@ -676,6 +730,145 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   bcp_PurgeBCL(p, l);
 }
 
+/*
+  with the cube at postion "pos" within "l", check whether there are any other cubes, which are a subset of the cobe at postion "pos"
+  The cubes, which are marked as subset are not deleted. This is done by a later call to bcp_BCLPurge()
+*/
+void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos)
+{
+  int j;
+  int cnt = l->cnt;
+  bc c = bcp_GetBCLCube(p, l, pos);
+  for( j = 0; j < cnt; j++ )
+  {
+    if ( j != pos && l->flags[j] == 0  )
+    {
+      /*
+        test, whether "b" is a subset of "a"
+        returns:      
+          1: yes, "b" is a subset of "a"
+          0: no, "b" is not a subset of "a"
+      */
+      if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
+      {
+        l->flags[j] = 1;      // mark the j cube as covered (to be deleted)
+      }            
+    }
+  }  
+}
+
+/*
+  Subtract cube b from a: a#b. All cubes resulting from this operation are appended to l if
+    - the new cube is valid
+    - the new cube is not covered by any other cube in l
+  After adding a cube, existing cubes are checked to be a subset of the newly added cube and marked for deletion if so
+*/
+void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
+{
+  int i, j;
+  unsigned bb;
+  unsigned orig_aa;
+  unsigned new_aa;
+  //int pos;
+
+  for( i = 0; i < p->var_cnt; i++ )
+  {
+    bb = bcp_GetCubeVar(p, b, i);
+    if ( bb != 3 )
+    {
+      orig_aa = bcp_GetCubeVar(p, a, i); 
+      new_aa = orig_aa & (bb^3);
+      if ( new_aa != 0 )
+      {
+        bcp_SetCubeVar(p, a, i, new_aa);        // modify a 
+        /* todo: a will be smaller, so we need to check, whether a is already a subcube of any cube in l */
+        for( j = 0; j < l->cnt; j++ )
+        {
+          /*
+            test, whether second cobe is a subset of the first cube
+            returns:      
+              1: yes, second is a subset of first cube
+              0: no, second cube is not a subset of first cube
+          */
+          if ( bcp_IsSubsetCube(p, bcp_GetBCLCube(p, l, j), a) != 0 )
+            break;
+        }
+        if ( j == l->cnt )
+          /*pos = */ bcp_AddBCLCubeByCube(p, l, a); // add the modified a cube to the list
+        bcp_SetCubeVar(p, a, i, orig_aa);        // undo the modification
+        //bcp_DoBCLSubsetCubeMark(p, l, pos);             // not sure, whether this will be required
+      }
+    }
+  }
+}
+
+
+/* a = a - b */
+void bcp_SubtractBCL(bcp p, bcl a, bcl b)
+{
+  int i, j;
+  bcl result = bcp_NewBCL(p);
+  for( i = 0; i < b->cnt; i++ )
+  {
+    bcp_ClearBCL(p, result);
+    for( j = 0; j < a->cnt; j++ )
+    {
+      bcp_DoBCLSharpOperation(p, result, bcp_GetBCLCube(p, a, j), bcp_GetBCLCube(p, b, i));
+    }
+    bcp_CopyBCL(p, a, result);
+    bcp_DoBCLSingleCubeContainment(p, a);
+  }
+  bcp_DeleteBCL(p, result);
+}
+
+/*
+  calculates the intersection of a and b and stores the result into "result"
+  this will apply SCC
+*/
+int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b)
+{
+  int i, j;
+  bc tmp;
+  
+  bcp_StartCubeStackFrame(p);
+  tmp = bcp_GetTempCube(p);
+  
+  assert(result != a);
+  assert(result != b);
+  
+  bcp_ClearBCL(p, result);
+  for( i = 0; i < b->cnt; i++ )
+  {
+    bcp_ClearBCL(p, result);
+    for( j = 0; j < a->cnt; j++ )
+    {
+      if ( bcp_IntersectionCube(p, tmp, bcp_GetBCLCube(p, a, j), bcp_GetBCLCube(p, b, i)) )
+      {
+        if ( bcp_AddBCLCubeByCube(p, result, tmp) < 0 )
+          return bcp_EndCubeStackFrame(p), 0;
+      }
+    }
+  }
+  
+  bcp_DoBCLSingleCubeContainment(p, result);
+
+  bcp_EndCubeStackFrame(p);  
+  return 1;
+}
+
+/* a = a intersection with b, result has SCC property */
+int bcp_IntersectionBCL(bcp p, bcl a, bcl b)
+{
+  bcl result = bcp_NewBCL(p);
+  
+  if ( bcp_IntersectionBCLs(p, result, a, b) == 0 )
+    return bcp_DeleteBCL(p, result), 0;
+  
+  bcp_CopyBCL(p, a, result);
+  bcp_DeleteBCL(p, result);
+  return 1;
+}
+
 
 /*
   Calculate the cofactor of the given list "l" with respect to the variable at "var_pos" and the given "value".
@@ -684,7 +877,7 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
 */
 void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
 {
-  int i, j;
+  int i;
   int cnt = l->cnt;
   unsigned v;
   bc c;
@@ -704,27 +897,26 @@ void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value
         if ( (v | value) == 3 ) // if no, then check if the variable would become don't care
         {
           bcp_SetCubeVar(p, c, var_pos, 3);   // yes, variable will become don't care
+          bcp_DoBCLSubsetCubeMark(p, l, i);
+
+          /*
           for( j = 0; j < cnt; j++ )
           {
             if ( j != i && l->flags[j] == 0  )
             {
-              /*
-                test, whether "b" is a subset of "a"
-                returns:      
-                  1: yes, "b" is a subset of "a"
-                  0: no, "b" is not a subset of "a"
-              */
               if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
               {
                 l->flags[j] = 1;      // mark the j cube as covered (to be deleted)
               }            
             }
           }
+          */
+          
         } // check for "becomes don't care'
       } // check for not don't care
     }
   } // i loop
-  bcp_PurgeBCL(p, l);
+  bcp_PurgeBCL(p, l);  // cleanup for bcp_DoBCLSubsetCubeMark()
   
   //printf("bcp_DoBCLOneVariableCofactor post\n");
   //bcp_ShowBCL(p, l);
@@ -764,6 +956,25 @@ int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c)
   bcp_CopyCube(p, bcp_GetBCLCube(p, l, l->cnt-1), c);  
   l->flags[l->cnt-1] = 0;
   return l->cnt-1;
+}
+
+/*
+  Adds the cubes from b to list a.
+  Technically this is the union of a and b, which i stored in a
+  This procedure does not do any simplification
+
+  Note: 
+    Maybe we need a bcp_UnionBCL() which also does in place SCC 
+*/
+int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b)
+{
+  int i;
+  for ( i = 0; i < b->cnt; i++ )
+  {
+    if ( bcp_AddBCLCubeByCube(p, a, bcp_GetBCLCube(p, b, i)) < 0 )
+      return 0;
+  }
+  return 1;
 }
 
 /*
@@ -1044,6 +1255,7 @@ int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l)
 
   returns the binate variable for which the number of one's plus number of zero's is max under the condition, that both number of once's and zero's are >0 
 
+  Implementation without SSE2
 */
 
 int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l)
@@ -1095,6 +1307,14 @@ int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l)
 }
 
 
+/*
+  Precondition: call to 
+    void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)  
+
+  returns the binate variable for which the number of one's plus number of zero's is max under the condition, that both number of once's and zero's are >0 
+
+  SSE2 Implementation
+*/
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
 {
   int max_sum_cnt = -1;
@@ -1146,7 +1366,7 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
         
         // at this point either both o and z are zero or both are not zero        
         // now, calculate the sum of both counts and store the sum in z, o is not required any more
-        z = _mm_add_epi8(z, o);
+        z = _mm_adds_epi8(z, o);
         c_cmp = _mm_cmplt_epi8( c_max, z );
         c_max = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max), _mm_and_si128(c_cmp, z) );                        // update max value if required
         c_max_idx = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max_idx), _mm_and_si128(c_cmp, c_idx) );    // update index value if required        
@@ -1165,18 +1385,111 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
           }
   }
   
+  /*
+  {
+    int mv = bcp_GetBCLMaxBinateSplitVariableSimple(p, l);
+    if ( max_sum_var != mv )
+    {
+      printf("failed max_sum_var=%d, mv=%d\n", max_sum_var, mv);
+      //bcp_ShowBCL(p, l);
+    }
+  }
+  */
   
   return max_sum_var;
 }
 
+/*
+  Precondition: call to 
+    void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)  
+
+  return 0 if there is any variable which has one's and "zero's in the table
+  otherwise this function returns 1
+*/
+int bcp_IsBCLUnate(bcp p)
+{
+  int b;
+  bc zero_cnt_cube[4];
+  bc one_cnt_cube[4];
+  __m128i z;
+  __m128i o;
+
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+
+  for( b = 0; b < p->blk_cnt; b++ )
+  {
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+        
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+  }
+  return 1;
+}
+
+// the unate check is faster than the split var calculation, but if the BCL is binate, then both calculations have to be done
+// so the unate precheck does not improve performance soo much (maybe 5%)
+#define BCL_TAUTOLOGY_WITH_UNATE_PRECHECK
 int bcp_IsBCLTautology(bcp p, bcl l)
 {
   int var_pos;
+  
+#ifdef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
+  int is_unate;
+#endif
+  
   bcp_CalcBCLBinateSplitVariableTable(p, l);
-  //var_pos = bcp_GetBCLBalancedBinateSplitVariable(p, l);
-  //var_pos = bcp_GetBCLMaxBinateSplitVariableSimple(p, l);
+
+  // if bcp_IsBCLUnate() return 1, then bcp_GetBCLMaxBinateSplitVariable() will return -1 !
+  // however bcp_IsBCLUnate() is much faster then bcp_GetBCLMaxBinateSplitVariable()
+  
+#ifdef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
+  is_unate = bcp_IsBCLUnate(p);
+  if ( is_unate )
+  {
+    int i, cnt = l->cnt;
+    for( i = 0; i < cnt; i++ )
+    {
+      if ( bcp_IsTautologyCube(p, bcp_GetBCLCube(p, l, i)) )
+        return 1;
+    }
+    return 0;
+  }
+#endif
 
   var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
+#ifndef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
   if ( var_pos < 0 )
   {
     int i, cnt = l->cnt;
@@ -1187,25 +1500,14 @@ int bcp_IsBCLTautology(bcp p, bcl l)
     }
     return 0;
   }
-  else
-  {
-    //printf("split %d\n", var_pos);
-  }
+#endif
+
+  assert( var_pos >= 0 );
   bcl f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
   bcl f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
   assert( f1 != NULL );
   assert( f2 != NULL );
 
-  //bcp_DoBCLSingleCubeContainment(p, f1);
-  //bcp_DoBCLSingleCubeContainment(p, f2);
-
-  /*
-  printf("f1:\n");
-  bcp_ShowBCL(p, f1);
-  printf("f2:\n");
-  bcp_ShowBCL(p, f2);
-  */
-  
   if ( bcp_IsBCLTautology(p, f1) == 0 )
     return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
   if ( bcp_IsBCLTautology(p, f2) == 0 )
@@ -1217,12 +1519,13 @@ int bcp_IsBCLTautology(bcp p, bcl l)
 /*============================================================*/
 
 
-bcl bcp_NewBCLWithRandomTautology(bcp p, int size)
+bcl bcp_NewBCLWithRandomTautology(bcp p, int size, int dc2one_conversion_cnt)
 {
   bcl l = bcp_NewBCL(p);
   int cube_pos = bcp_AddBCLCubeByCube(p, l, bcp_GetGlobalCube(p, 3));
   int var_pos = 0; 
   unsigned value;
+  int i;
 
   for(;;)
   {
@@ -1238,8 +1541,85 @@ bcl bcp_NewBCLWithRandomTautology(bcp p, int size)
     if ( l->cnt >= size )
       break;
   }
+
+  for( i = 0; i < dc2one_conversion_cnt; i++ )
+  {
+    for(;;)
+    {
+      cube_pos = rand() % l->cnt;
+      var_pos = rand() % p->var_cnt;  
+      value = bcp_GetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos);
+      if ( value == 3 )
+      {
+        bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, 2);
+        break;
+      }
+    }
+  }
   
   return l;
+}
+
+/*============================================================*/
+
+/*
+  error with var_cnt == 20
+*/
+void internalTest(int var_cnt)
+{
+  bcp p = bcp_New(var_cnt);
+  bcl t = bcp_NewBCLWithRandomTautology(p, var_cnt, 0);
+  bcl r = bcp_NewBCLWithRandomTautology(p, var_cnt, var_cnt);
+  bcl l = bcp_NewBCL(p);
+  bcl m = bcp_NewBCL(p);
+  
+  int tautology;
+  
+  printf("tautology test 1\n");
+  tautology = bcp_IsBCLTautology(p, t);
+  assert(tautology != 0);
+  
+  printf("copy test\n");
+  bcp_CopyBCL(p, l, t);
+  assert( l->cnt == t->cnt );
+  
+  printf("tautology test 2\n");
+  tautology = bcp_IsBCLTautology(p, l);
+  assert(tautology != 0);
+
+  printf("subtract test 1\n");
+  bcp_SubtractBCL(p, l, t);
+  assert( l->cnt == 0 );
+
+  printf("tautology test 3\n");
+  tautology = bcp_IsBCLTautology(p, r);
+  assert(tautology == 0);
+
+  printf("subtract test 2\n");
+  bcp_ClearBCL(p, l);
+  bcp_AddBCLCubeByCube(p, l, bcp_GetGlobalCube(p, 3));  // "l" contains the universal cube
+  bcp_SubtractBCL(p, l, r);             // "l" contains the negation of "r"
+  printf("subtract result size %d\n", l->cnt);
+  assert( l->cnt != 0 );
+
+  printf("intersection test\n");
+  bcp_IntersectionBCLs(p, m, l, r);
+  printf("intersection result  m->cnt=%d l->cnt=%d r->cnt=%d\n", m->cnt, l->cnt, r->cnt);
+  assert( m->cnt == 0 );
+
+
+  printf("tautology test 4\n");
+  bcp_AddBCLCubesByBCL(p, l, r);
+  //bcp_DoBCLSingleCubeContainment(p, l);
+  printf("merge result size %d\n", l->cnt);
+  tautology = bcp_IsBCLTautology(p, l);
+  assert(tautology != 0);               // error with var_cnt == 20 
+  
+  bcp_DeleteBCL(p,  t);
+  bcp_DeleteBCL(p,  r);
+  bcp_DeleteBCL(p,  l);
+  bcp_Delete(p); 
+
 }
 
 /*============================================================*/
@@ -1278,43 +1658,46 @@ char *cubes_string=
 "110011\n"
 "1-0-10\n"
 "1001-0\n"
-"------\n"
-"------\n"
 ;
 
 
 
-int mainy(void)
+int main(void)
 {
-  int i;
   bcp p = bcp_New(bcp_GetVarCntFromString(cubes_string));
   bcl l = bcp_NewBCL(p);
+  bcl m = bcp_NewBCL(p);
   bcp_AddBCLCubesByString(p, l, cubes_string);
+  bcp_AddBCLCubeByCube(p, m, bcp_GetGlobalCube(p, 3));
+  bcp_SubtractBCL(p, m, l);
   
+  puts("original:");
+  bcp_ShowBCL(p, l);
+  puts("complement:");
+  bcp_ShowBCL(p, m);
+
+  bcp_IntersectionBCL(p, m, l);
+  printf("intersction cube count %d\n", m->cnt);
+
+  bcp_ClearBCL(p, m);
+  bcp_AddBCLCubeByCube(p, m, bcp_GetGlobalCube(p, 3));
+  bcp_SubtractBCL(p, m, l);
   
-  bcp_ShowBCL(p, l);
-  for( i = 0; i < bcp_GetBCLCnt(p, l); i++ )
-  {
-    bc c = bcp_GetBCLCube(p, l, i);
-    printf("%s t:%d, illegal:%d\n", 
-      bcp_GetStringFromCube(p, c), 
-      bcp_IsTautologyCube(p, c), 
-      bcp_IsIllegal(p, c) );
-  }
+  bcp_AddBCLCubesByBCL(p, m, l);        // add l to m
+  printf("tautology=%d\n", bcp_IsBCLTautology(p, m));   // do a tautology test on the union
 
-  bcp_GetBCLBalancedBinateSplitVariable(p, l);
-  // bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value)
-
-  bcp_DoBCLSingleCubeContainment(p, l);
-  bcp_ShowBCL(p, l);
+  
   bcp_DeleteBCL(p,  l);
+  bcp_DeleteBCL(p,  m);
   bcp_Delete(p); 
+  
+  internalTest(20);
   return 0;
 }
 
 
 
-int main(void)
+int mainz(void)
 {
   char *s = 
 "-------------------------------------------------------------------------------------1\n"
@@ -1328,10 +1711,14 @@ int main(void)
   //printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
   bcp_DeleteBCL(p,  l);
   
-  //l = bcp_NewBCLWithRandomTautology(p, 244);
-  l = bcp_NewBCLWithRandomTautology(p, 34);
+  //l = bcp_NewBCLWithRandomTautology(p, 244, 0);
+  l = bcp_NewBCLWithRandomTautology(p, 34, 0);
   bcp_ShowBCL(p, l);
   printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
+  l->flags[l->cnt/2] = 1;
+  bcp_PurgeBCL(p, l);
+  printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
+  
   bcp_DeleteBCL(p,  l);
 
   bcp_Delete(p);  
