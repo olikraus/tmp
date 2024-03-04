@@ -515,15 +515,13 @@ int bcp_IsIllegal(bcp p, bc c)
 */
 int bcp_IsSubsetCube(bcp p, bc a, bc b)
 {
-  int i, cnt = p->blk_cnt;
-  uint16_t f;
+  int i;
   __m128i bb;
-  for( i = 0; i < cnt; i++ )
+  for( i = 0; i < p->blk_cnt; i++ )
   {    
       /* a&b == b ?*/
     bb = _mm_loadu_si128(b+i);
-    f = _mm_movemask_epi8(_mm_cmpeq_epi16(_mm_and_si128(_mm_loadu_si128(a+i), bb), bb ));
-    if ( f != 0x0ffff )
+    if ( _mm_movemask_epi8(_mm_cmpeq_epi16(_mm_and_si128(_mm_loadu_si128(a+i), bb), bb )) != 0x0ffff )
       return 0;
   }
   return 1;
@@ -1614,7 +1612,22 @@ void internalTest(int var_cnt)
   printf("merge result size %d\n", l->cnt);
   tautology = bcp_IsBCLTautology(p, l);
   assert(tautology != 0);               // error with var_cnt == 20 
-  
+
+  bcp_CopyBCL(p, l, t);
+  assert( l->cnt == t->cnt );
+  printf("subtract test 3\n");          // repeat the subtract test with "r", use the tautology list "t" instead of the universal cube
+  bcp_SubtractBCL(p, l, r);             // "l" contains the negation of "r"
+  assert( l->cnt != 0 );
+  printf("intersection test 2\n");
+  bcp_IntersectionBCLs(p, m, l, r);
+  assert( m->cnt == 0 );
+
+  printf("tautology test 5\n");
+  bcp_AddBCLCubesByBCL(p, l, r);
+  printf("merge result size %d\n", l->cnt);
+  tautology = bcp_IsBCLTautology(p, l);
+  assert(tautology != 0);               
+
   bcp_DeleteBCL(p,  t);
   bcp_DeleteBCL(p,  r);
   bcp_DeleteBCL(p,  l);
@@ -1691,7 +1704,7 @@ int main(void)
   bcp_DeleteBCL(p,  m);
   bcp_Delete(p); 
   
-  internalTest(20);
+  internalTest(21);
   return 0;
 }
 
