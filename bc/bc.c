@@ -1369,7 +1369,7 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
         c_max = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max), _mm_and_si128(c_cmp, z) );                        // update max value if required
         c_max_idx = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max_idx), _mm_and_si128(c_cmp, c_idx) );    // update index value if required        
         
-        c_idx = _mm_add_epi8(c_idx, _mm_loadu_si128((__m128i *)m_base_inc));
+        c_idx = _mm_adds_epi8(c_idx, _mm_loadu_si128((__m128i *)m_base_inc));   // probably it doesn't matter to use add or adds
       }
       
       _mm_storeu_si128( (__m128i *)m_max, c_max );
@@ -1458,10 +1458,12 @@ int bcp_IsBCLUnate(bcp p)
 
 // the unate check is faster than the split var calculation, but if the BCL is binate, then both calculations have to be done
 // so the unate precheck does not improve performance soo much (maybe 5%)
-#define BCL_TAUTOLOGY_WITH_UNATE_PRECHECK
+//#define BCL_TAUTOLOGY_WITH_UNATE_PRECHECK
 int bcp_IsBCLTautology(bcp p, bcl l)
 {
   int var_pos;
+  bcl f1;
+  bcl f2;
   
 #ifdef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
   int is_unate;
@@ -1501,8 +1503,8 @@ int bcp_IsBCLTautology(bcp p, bcl l)
 #endif
 
   assert( var_pos >= 0 );
-  bcl f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
-  bcl f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
+  f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
+  f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
   assert( f1 != NULL );
   assert( f2 != NULL );
 
@@ -1511,7 +1513,64 @@ int bcp_IsBCLTautology(bcp p, bcl l)
   if ( bcp_IsBCLTautology(p, f2) == 0 )
     return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
   
+
   return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
+}
+
+
+bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l)
+{
+    bcl result = bcp_NewBCL(p);
+    bcp_AddBCLCubeByCube(p, result, bcp_GetGlobalCube(p, 3));  // "result" contains the universal cube
+    bcp_SubtractBCL(p, result, l);             // "result" contains the negation of "l"
+    return result;
+}
+
+
+bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
+{
+  int var_pos;
+  int i;
+  bcl f1;
+  bcl f2;
+  bcl cf1;
+  bcl cf2;
+  
+  bcp_CalcBCLBinateSplitVariableTable(p, l);
+  var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
+    
+  if ( var_pos < 0 )
+  {
+    return bcp_NewBCLComplementWithSubtract(p, l);
+  }
+  
+  f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
+  assert(f1 != NULL);
+  f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
+  assert(f2 != NULL);
+  cf1 = bcp_NewBCLComplementWithCofactor(p, f1);
+  assert(cf1 != NULL);
+  cf2 = bcp_NewBCLComplementWithCofactor(p, f2);
+  assert(cf2 != NULL);
+  bcp_DeleteBCL(p, f1);
+  bcp_DeleteBCL(p, f2);
+  
+  for( i = 0; i < cf1->cnt; i++ )
+    if ( cf1->flags[i] == 0 )
+      bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf1, i), var_pos, 2);  
+
+  for( i = 0; i < cf2->cnt; i++ )
+    if ( cf2->flags[i] == 0 )
+      bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf2, i), var_pos, 1);  
+
+  if ( bcp_AddBCLCubesByBCL(p, cf1, cf2) == 0 )
+    return  bcp_DeleteBCL(p, cf1), bcp_DeleteBCL(p, cf2), NULL;
+
+  bcp_DeleteBCL(p, cf2);
+
+  bcp_DoBCLSingleCubeContainment(p, cf1);
+  
+  return cf1;
 }
 
 /*============================================================*/
@@ -1675,7 +1734,7 @@ char *cubes_string=
 
 
 
-int main(void)
+int mainy(void)
 {
   bcp p = bcp_New(bcp_GetVarCntFromString(cubes_string));
   bcl l = bcp_NewBCL(p);
@@ -1710,29 +1769,34 @@ int main(void)
 
 
 
-int mainz(void)
+int main(void)
 {
   char *s = 
-"-------------------------------------------------------------------------------------1\n"
-"------------------------------------------------------------------------------------10\n"
-"------------------------------------------------------------------------------------00\n"
+"-0-1\n"
+"1-0-\n"
+"-1--\n"
+"0--1\n"
   ;
   bcp p = bcp_New(bcp_GetVarCntFromString(s));
   bcl l = bcp_NewBCL(p);
+  bcl n;
+  bcl m;
+  
   bcp_AddBCLCubesByString(p, l, s);
-  //bcp_ShowBCL(p, l);
-  //printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
-  bcp_DeleteBCL(p,  l);
-  
-  //l = bcp_NewBCLWithRandomTautology(p, 244, 0);
-  l = bcp_NewBCLWithRandomTautology(p, 34, 0);
+
+  puts("original:");
   bcp_ShowBCL(p, l);
-  printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
-  l->flags[l->cnt/2] = 1;
-  bcp_PurgeBCL(p, l);
-  printf("tautology=%d\n", bcp_IsBCLTautology(p, l));
+
+  n = bcp_NewBCLComplementWithSubtract(p, l);
+  puts("complement with subtract:");
+  bcp_ShowBCL(p, n);
+  
+  m = bcp_NewBCLComplementWithCofactor(p, l);
+  puts("complement with cofactor:");
+  bcp_ShowBCL(p, m);
   
   bcp_DeleteBCL(p,  l);
+  bcp_DeleteBCL(p,  n);
 
   bcp_Delete(p);  
   return 0;
