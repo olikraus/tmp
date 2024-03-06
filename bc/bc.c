@@ -141,6 +141,9 @@ int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l);
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
 int bcp_IsBCLUnate(bcp p);
 
+int bcp_IsBCLTautology(bcp p, bcl l);
+bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);
+bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l);
 
 
 /*============================================================*/
@@ -1034,6 +1037,12 @@ void bcp_AndBCL(bcp p, bc r, bcl l)
 }
 
 
+/*
+  For the sum calculation use signed 8 bit integer, because SSE2 only has a signed cmplt for 8 bit
+  As a consequence, we are somehow loosing one bit in the sum, because saturation will be at 0x7f
+*/
+#define _mm_adds(a,b) _mm_adds_epi8((a),(b))
+
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 {
 	int i, blk_cnt = p->blk_cnt;
@@ -1114,37 +1123,37 @@ void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 			c = _mm_loadu_si128(bcp_GetBCLCube(p, l, j)+i);
 			/* handle variable at bits 0/1 */
 			t = _mm_andnot_si128(c, mc);		// flip the lowerst bit and mask the lowerst bit in each byte: the "10" code for value "one" will become "00000001"
-			oc0 = _mm_adds_epu8(oc0, t);		// sum the "one" value with saturation
+			oc0 = _mm_adds(oc0, t);		// sum the "one" value with saturation
 			c = _mm_srai_epi16(c,1);			// shift right to proceed with the "zero" value
 			t = _mm_andnot_si128(c, mc);
-			zc0 = _mm_adds_epu8(zc0, t);
+			zc0 = _mm_adds(zc0, t);
 			
 			c = _mm_srai_epi16(c,1);			// shift right to process the next variable
 
 			/* handle variable at bits 2/3 */
 			t = _mm_andnot_si128(c, mc);
-			oc1 = _mm_adds_epu8(oc1, t);
+			oc1 = _mm_adds(oc1, t);
 			c = _mm_srai_epi16(c,1);
 			t = _mm_andnot_si128(c, mc);
-			zc1 = _mm_adds_epu8(zc1, t);
+			zc1 = _mm_adds(zc1, t);
 
 			c = _mm_srai_epi16(c,1);
 
 			/* handle variable at bits 4/5 */
 			t = _mm_andnot_si128(c, mc);
-			oc2 = _mm_adds_epu8(oc2, t);
+			oc2 = _mm_adds(oc2, t);
 			c = _mm_srai_epi16(c,1);
 			t = _mm_andnot_si128(c, mc);
-			zc2 = _mm_adds_epu8(zc2, t);
+			zc2 = _mm_adds(zc2, t);
 
 			c = _mm_srai_epi16(c,1);
 
 			/* handle variable at bits 6/7 */
 			t = _mm_andnot_si128(c, mc);
-			oc3 = _mm_adds_epu8(oc3, t);
+			oc3 = _mm_adds(oc3, t);
 			c = _mm_srai_epi16(c,1);
 			t = _mm_andnot_si128(c, mc);
-			zc3 = _mm_adds_epu8(zc3, t);
+			zc3 = _mm_adds(zc3, t);
 		}
 		
 		/* store the registers for counting zeros and ones */
@@ -1291,6 +1300,8 @@ int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l)
           byte_idx = (i & 63)>>2;
           one_cnt = ((uint8_t *)(one_cnt_cube[cube_idx] + blk_idx))[byte_idx];
           zero_cnt = ((uint8_t *)(zero_cnt_cube[cube_idx] + blk_idx))[byte_idx];
+          printf("%02x/%02x ", one_cnt, zero_cnt);
+    
           if ( one_cnt > 0 && zero_cnt > 0 )
           {
             if ( max_sum_cnt < (one_cnt + zero_cnt) )
@@ -1300,6 +1311,7 @@ int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l)
             }
           }
   }  
+  printf("\n");
   return max_sum_var;
 }
 
@@ -1349,26 +1361,52 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
   for( b = 0; b < p->blk_cnt; b++ )
   {
       c_idx = _mm_loadu_si128((__m128i *)m_base_idx);
+      c_max = _mm_setzero_si128();
+      c_max_idx = _mm_setzero_si128();
     
       for( i = 0; i < 4; i++ )
       {
         z = _mm_loadu_si128(zero_cnt_cube[i]+b);
         o = _mm_loadu_si128(one_cnt_cube[i]+b);
+
+        /*
+        printf("a%d: ", i);
+        print128_num(o);
         
+        printf("a%d: ", i);
+        print128_num(z);
+        */
+        
+        // idea: if either count is zero, then set also the other count to zero
         // because we don't want any index on unate variables, we clear both counts if one count is zero
         c = _mm_cmpeq_epi8(z, _mm_setzero_si128());     // check for zero count of zeros
         o = _mm_andnot_si128 (c, o);                                    // and clear the one count if the zero count is zero
         c = _mm_cmpeq_epi8(o, _mm_setzero_si128());     // check for zero count of ones
         z = _mm_andnot_si128 (c, z);                                    // and clear the zero count if the one count is zero
+
+        /*
+        printf("b     %d: ", i);
+        print128_num(o);
+        
+        printf("b     %d: ", i);
+        print128_num(z);
+        */
         
         // at this point either both o and z are zero or both are not zero        
         // now, calculate the sum of both counts and store the sum in z, o is not required any more
-        z = _mm_adds_epi8(z, o);
+        z = _mm_adds(z, o);
+
+        /*
+        printf("z     %d: ", i);
+        print128_num(z);
+        */
+        
         c_cmp = _mm_cmplt_epi8( c_max, z );
+
         c_max = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max), _mm_and_si128(c_cmp, z) );                        // update max value if required
         c_max_idx = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max_idx), _mm_and_si128(c_cmp, c_idx) );    // update index value if required        
         
-        c_idx = _mm_adds_epi8(c_idx, _mm_loadu_si128((__m128i *)m_base_inc));   // probably it doesn't matter to use add or adds
+        c_idx = _mm_adds_epu8(c_idx, _mm_loadu_si128((__m128i *)m_base_inc));   // we just add 1 to the value, so the highest value per byte is 64
       }
       
       _mm_storeu_si128( (__m128i *)m_max, c_max );
@@ -1458,7 +1496,7 @@ int bcp_IsBCLUnate(bcp p)
 // the unate check is faster than the split var calculation, but if the BCL is binate, then both calculations have to be done
 // so the unate precheck does not improve performance soo much (maybe 5%)
 //#define BCL_TAUTOLOGY_WITH_UNATE_PRECHECK
-int bcp_IsBCLTautology(bcp p, bcl l)
+int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
 {
   int var_pos;
   bcl f1;
@@ -1500,6 +1538,12 @@ int bcp_IsBCLTautology(bcp p, bcl l)
     return 0;
   }
 #endif
+  
+  //printf("depth %d, split var %d, size %d\n", depth, var_pos, l->cnt);
+  if ( var_pos < 0 )
+  {
+    printf("split var simple %d\n", bcp_GetBCLMaxBinateSplitVariableSimple(p, l));
+  }
 
   assert( var_pos >= 0 );
   f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
@@ -1507,13 +1551,18 @@ int bcp_IsBCLTautology(bcp p, bcl l)
   assert( f1 != NULL );
   assert( f2 != NULL );
 
-  if ( bcp_IsBCLTautology(p, f1) == 0 )
+  if ( bcp_IsBCLTautologySub(p, f1, depth+1) == 0 )
     return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
-  if ( bcp_IsBCLTautology(p, f2) == 0 )
+  if ( bcp_IsBCLTautologySub(p, f2, depth+1) == 0 )
     return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
   
 
   return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
+}
+
+int bcp_IsBCLTautology(bcp p, bcl l)
+{
+  return bcp_IsBCLTautologySub(p, l, 0);
 }
 
 
@@ -1564,6 +1613,11 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
       bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf2, i), var_pos, 1);  
   bcp_DoBCLSingleCubeContainment(p, cf2);
 
+  /*
+    at this point the merging process should be much smarter
+    at least we need to check, whether cubes can be recombined with each other
+  */
+    
   if ( bcp_AddBCLCubesByBCL(p, cf1, cf2) == 0 )
     return  bcp_DeleteBCL(p, cf1), bcp_DeleteBCL(p, cf2), NULL;
 
@@ -1630,6 +1684,7 @@ void internalTest(int var_cnt)
   bcl r = bcp_NewBCLWithRandomTautology(p, var_cnt, var_cnt);
   bcl l = bcp_NewBCL(p);
   bcl m = bcp_NewBCL(p);
+  bcl n;
   
   int tautology;
   
@@ -1685,9 +1740,34 @@ void internalTest(int var_cnt)
   printf("tautology test 5\n");
   bcp_AddBCLCubesByBCL(p, l, r);
   printf("merge result size %d\n", l->cnt);
+  //bcp_ShowBCL(p, bcp_NewBCLComplementWithCofactor(p, l));
   tautology = bcp_IsBCLTautology(p, l);
   assert(tautology != 0);               
 
+
+
+  printf("cofactor complement test\n");
+  bcp_ClearBCL(p, l);
+  
+  n = bcp_NewBCLComplementWithCofactor(p, r);
+  printf("complement result size %d\n", n->cnt);
+  assert( n->cnt != 0 );
+
+  printf("intersection test 3\n");
+  bcp_IntersectionBCLs(p, m, n, r);
+  printf("intersection result  m->cnt=%d n->cnt=%d r->cnt=%d\n", m->cnt, n->cnt, r->cnt);
+  assert( m->cnt == 0 );
+
+  printf("tautology test 6\n");
+  bcp_AddBCLCubesByBCL(p, n, r);
+  //bcp_DoBCLSingleCubeContainment(p, l);
+  printf("merge result size %d\n", n->cnt);
+  //bcp_ShowBCL(p, bcp_NewBCLComplementWithSubtract(p, r));
+  tautology = bcp_IsBCLTautology(p, n);
+  assert(tautology != 0);
+
+
+  bcp_DeleteBCL(p,  n);
   bcp_DeleteBCL(p,  t);
   bcp_DeleteBCL(p,  r);
   bcp_DeleteBCL(p,  l);
@@ -1770,7 +1850,7 @@ int mainy(void)
 
 
 
-int main(void)
+int main1(void)
 {
   char *s = 
 "-0-1\n"
@@ -1778,11 +1858,12 @@ int main(void)
 "-1--\n"
 "0--1\n"
   ;
+  
   bcp p = bcp_New(bcp_GetVarCntFromString(s));
   bcl l = bcp_NewBCL(p);
   bcl n;
   bcl m;
-  
+
   bcp_AddBCLCubesByString(p, l, s);
 
   puts("original:");
@@ -1800,5 +1881,33 @@ int main(void)
   bcp_DeleteBCL(p,  n);
 
   bcp_Delete(p);  
+  return 0;
+}
+
+int main(void)
+{
+  bcp p = bcp_New(8);
+  bcl l = bcp_NewBCLWithRandomTautology(p, 8, 8);
+  bcl n;
+  bcl m;
+  
+  puts("original:");
+  bcp_ShowBCL(p, l);
+
+  n = bcp_NewBCLComplementWithSubtract(p, l);
+  puts("complement with subtract:");
+  bcp_ShowBCL(p, n);
+  
+  m = bcp_NewBCLComplementWithCofactor(p, l);
+  puts("complement with cofactor:");
+  bcp_ShowBCL(p, m);
+  
+  bcp_DeleteBCL(p,  l);
+  bcp_DeleteBCL(p,  n);
+
+  bcp_Delete(p);  
+  
+  internalTest(19);
+  
   return 0;
 }
