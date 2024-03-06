@@ -656,8 +656,6 @@ void bcp_ShowBCL(bcp p, bcl l)
 
 /*
   remove cubes from the list, which are maked as deleted
-  cubes are marked as deletable by 
-    bcp_DoBCLSingleCubeContainment()
 */
 void bcp_PurgeBCL(bcp p, bcl l)
 {
@@ -693,6 +691,7 @@ void bcp_PurgeBCL(bcp p, bcl l)
 
 /*
   In the given BCL, ensure, that no cube is part of any other cube
+  This will call bcp_PurgeBCL()
 */
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
 {
@@ -1558,17 +1557,19 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   for( i = 0; i < cf1->cnt; i++ )
     if ( cf1->flags[i] == 0 )
       bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf1, i), var_pos, 2);  
+  bcp_DoBCLSingleCubeContainment(p, cf1);
 
   for( i = 0; i < cf2->cnt; i++ )
     if ( cf2->flags[i] == 0 )
       bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf2, i), var_pos, 1);  
+  bcp_DoBCLSingleCubeContainment(p, cf2);
 
   if ( bcp_AddBCLCubesByBCL(p, cf1, cf2) == 0 )
     return  bcp_DeleteBCL(p, cf1), bcp_DeleteBCL(p, cf2), NULL;
 
   bcp_DeleteBCL(p, cf2);
 
-  bcp_DoBCLSingleCubeContainment(p, cf1);
+  bcp_DoBCLSingleCubeContainment(p, cf1);       // probably not required, because the two sets are disjunct....
   
   return cf1;
 }
