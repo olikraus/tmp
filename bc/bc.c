@@ -2206,8 +2206,14 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   
   f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
   assert(f1 != NULL);
+  bcp_DoBCLSimpleExpand(p, f1);
+  bcp_DoBCLSingleCubeContainment(p, f1);
+  
   f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
   assert(f2 != NULL);
+  bcp_DoBCLSimpleExpand(p, f2);
+  bcp_DoBCLSingleCubeContainment(p, f2);
+  
   cf1 = bcp_NewBCLComplementWithCofactor(p, f1);
   assert(cf1 != NULL);
   cf2 = bcp_NewBCLComplementWithCofactor(p, f2);
@@ -2218,11 +2224,13 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   for( i = 0; i < cf1->cnt; i++ )
     if ( cf1->flags[i] == 0 )
       bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf1, i), var_pos, 2);  
+  //bcp_DoBCLSimpleExpand(p, cf1);
   bcp_DoBCLSingleCubeContainment(p, cf1);
 
   for( i = 0; i < cf2->cnt; i++ )
     if ( cf2->flags[i] == 0 )
       bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf2, i), var_pos, 1);  
+  //bcp_DoBCLSimpleExpand(p, cf2);
   bcp_DoBCLSingleCubeContainment(p, cf2);
 
   /*
@@ -2258,7 +2266,10 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
 
   bcp_DeleteBCL(p, cf2);
 
-  //bcp_DoBCLSingleCubeContainment(p, cf1);       // probably not required, because the two sets are disjunct....
+  bcp_DoBCLSimpleExpand(p, cf1);
+  bcp_DoBCLSingleCubeContainment(p, cf1);
+
+  
   
   return cf1;
 }
@@ -2524,26 +2535,37 @@ int main1(void)
   return 0;
 }
 
+#include <time.h>
+
 int main(void)
 {
-  bcp p = bcp_New(8);
-  bcl l = bcp_NewBCLWithRandomTautology(p, 8, 8);
+  
+  int cnt = 15;
+  clock_t t0, t1, t2;
+  bcp p = bcp_New(cnt);
+  bcl l = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt+10);
   bcl n;
   bcl m;
   
-  puts("original:");
-  bcp_ShowBCL(p, l);
+  //puts("original:");
+  //bcp_ShowBCL(p, l);
 
+  t0 = clock();
   n = bcp_NewBCLComplementWithSubtract(p, l);
-  puts("complement with subtract:");
-  bcp_ShowBCL(p, n);
+  
+  t1 = clock();
+  printf("complement with subtract: cnt=%d clock=%ld\n", n->cnt, t1-t0);
+  //puts("complement with subtract:");
+  //bcp_ShowBCL(p, n);
   
   m = bcp_NewBCLComplementWithCofactor(p, l);
-  puts("complement with cofactor:");
-  bcp_ShowBCL(p, m);
+  t2 = clock();
+  printf("complement with cofactor: cnt=%d clock=%ld\n", m->cnt, (t2-t1));
+  //bcp_ShowBCL(p, m);
   
   bcp_DeleteBCL(p,  l);
   bcp_DeleteBCL(p,  n);
+  bcp_DeleteBCL(p,  m);
 
   bcp_Delete(p);  
   
