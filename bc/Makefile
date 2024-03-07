@@ -1,5 +1,5 @@
 # CFLAGS = -g -pg -Wall
-CFLAGS = -g -Wall
+CFLAGS = -O4 -Wall
 
 SRC = bc.c
 

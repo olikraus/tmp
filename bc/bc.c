@@ -1517,6 +1517,66 @@ int bcp_GetBCLMaxBinateSplitVariableSimple8(bcp p, bcl l)
   return max_sum_var;
 }
 
+/* 16 bit version */
+int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l)
+{
+  int max_sum_cnt = -1;
+  int max_sum_var = -1;
+  int cube_idx;
+  int blk_idx;
+  int word_idx;
+  int one_cnt;
+  int zero_cnt;
+  
+  int i;
+  
+  bc zero_cnt_cube[8];
+  bc one_cnt_cube[8];
+
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  zero_cnt_cube[4] = bcp_GetGlobalCube(p, 8);
+  zero_cnt_cube[5] = bcp_GetGlobalCube(p, 9);
+  zero_cnt_cube[6] = bcp_GetGlobalCube(p, 10);
+  zero_cnt_cube[7] = bcp_GetGlobalCube(p, 11);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 12);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 13);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 14);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 15);
+  one_cnt_cube[4] = bcp_GetGlobalCube(p, 16);
+  one_cnt_cube[5] = bcp_GetGlobalCube(p, 17);
+  one_cnt_cube[6] = bcp_GetGlobalCube(p, 18);
+  one_cnt_cube[7] = bcp_GetGlobalCube(p, 19);
+
+  
+  max_sum_cnt = -1;
+  max_sum_var = -1;
+  for( i = 0; i < p->var_cnt; i++ )
+  {
+          cube_idx = i & 7;
+          blk_idx = i / 64;
+          word_idx = (i & 63)>>3;
+          one_cnt = ((uint16_t *)(one_cnt_cube[cube_idx] + blk_idx))[word_idx];
+          zero_cnt = ((uint16_t *)(zero_cnt_cube[cube_idx] + blk_idx))[word_idx];
+          //printf("%02x/%02x ", one_cnt, zero_cnt);
+    
+          if ( one_cnt > 0 && zero_cnt > 0 )
+          {
+            if ( max_sum_cnt < (one_cnt + zero_cnt) )
+            {
+                    max_sum_cnt = one_cnt + zero_cnt;
+                    max_sum_var = i;
+            }
+          }
+  }  
+  //printf("\n");
+  return max_sum_var;
+}
+
 
 /*
   Precondition: call to 
@@ -1817,6 +1877,7 @@ int bcp_IsBCLUnate8(bcp p)
 }
 
 
+/* 16 bit version */
 int bcp_IsBCLUnate(bcp p)
 {
   int b;
@@ -1942,7 +2003,7 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   }
 #endif
 
-  var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
+  var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);     // bcp_GetBCLMaxBinateSplitVariableSimple has similar performance
 #ifndef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
   if ( var_pos < 0 )
   {
