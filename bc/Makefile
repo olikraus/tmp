@@ -1,5 +1,6 @@
 # CFLAGS = -g -pg -Wall
-CFLAGS = -O4 -Wall
+# CFLAGS = -O4 -march=silvermont -Wall
+CFLAGS = -g -pg -Wall
 
 SRC = bc.c
 

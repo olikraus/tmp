@@ -12,6 +12,13 @@
 
   gcc -g -Wall -fsanitize=address bc.c
   
+  predecessor output
+  echo | gcc -dM -E -  
+  echo | gcc -march=native -dM -E -
+  echo | gcc -march=silvermont -dM -E -         // Pentium N3710: sse4.2 popcnt 
+ 
+
+  
   === definitions ===
   
   - Variable: A boolean variable which is one (1), zero (0), don't care (-) or illegal (x)
@@ -112,6 +119,8 @@ int bcp_CompareCube(bcp p, bc a, bc b);
 int bcp_IsTautologyCube(bcp p, bc c);
 int bcp_IntersectionCube(bcp p, bc r, bc a, bc b); // returns 0, if there is no intersection
 int bcp_IsIllegal(bcp p, bc c);
+int bcp_GetCubeVariableCount(bcp p, bc cube);
+int bcp_GetCubeDelta(bcp p, bc a, bc b);
 
 bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
@@ -522,6 +531,43 @@ int bcp_IsIllegal(bcp p, bc c)
   return 1;
 }
 
+/*
+  return the number of 01 or 10 values in a legal cube.
+*/
+int bcp_GetCubeVariableCount(bcp p, bc cube)
+{
+  int i, cnt = p->blk_cnt;
+  int delta = 0;
+    __m128i c;
+  for( i = 0; i < cnt; i++ )
+  {
+    c = _mm_loadu_si128(cube+i);      // load one block from cube
+    delta += __builtin_popcountll(~_mm_cvtsi128_si64(_mm_unpackhi_epi64(c, c)));
+    delta += __builtin_popcountll(~_mm_cvtsi128_si64(c));
+  }  
+  return delta;
+}
+
+int bcp_GetCubeDelta(bcp p, bc a, bc b)
+{
+  int i, cnt = p->blk_cnt;
+  int delta = 0;
+  __m128i zeromask = _mm_loadu_si128(bcp_GetGlobalCube(p, 1));
+  __m128i c;
+
+  for( i = 0; i < cnt; i++ )
+  {
+    c = _mm_loadu_si128(a+i);      // load one block from a
+    c = _mm_and_si128(c,  _mm_loadu_si128(b+i)); // "and" between a&b: how often will there be 00 (=illegal)?
+    c = _mm_or_si128( c, _mm_srai_epi16(c,1));  // how often will be there x0?
+    c = _mm_andnot_si128(c, zeromask);          // invert c (look for x1) and mask with the zero mask to get 01
+    delta += __builtin_popcountll(_mm_cvtsi128_si64(_mm_unpackhi_epi64(c, c)));
+    delta += __builtin_popcountll(_mm_cvtsi128_si64(c));
+  }
+  
+  return delta;
+}
+
 
 /*
   test, whether "b" is a subset of "a"
@@ -743,6 +789,85 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   } // i loop
   bcp_PurgeBCL(p, l);
 }
+
+
+/*
+  try to expand cubes into another cube
+*/
+void bcp_DoBCLSimpleExpand(bcp p, bcl l)
+{
+  int i, j, v;
+  int cnt = l->cnt;
+  int delta;
+  int cval, dval;
+  bc c, d;
+  for( i = 0; i < cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      c = bcp_GetBCLCube(p, l, i);
+      for( j = i+1; j < cnt; j++ )
+      {
+        if ( l->flags[j] == 0 )
+        {
+          //if ( i != j )
+          {
+            d = bcp_GetBCLCube(p, l, j); 
+            delta = bcp_GetCubeDelta(p, c, d);
+            //printf("delta=%d\n", delta);
+            
+            if ( delta == 1 )
+            {
+              // search for the variable, which causes the delta
+              for( v = 0; v < p->var_cnt; v++ )
+              {
+                cval = bcp_GetCubeVar(p, c, v);
+                dval = bcp_GetCubeVar(p, d, v);
+                if ( (cval & dval) == 0 )
+                {
+                  break;
+                }
+              }
+              if ( v < p->var_cnt )
+              {
+                //printf("v=%d\n", v);
+                bcp_SetCubeVar(p, c, v, 3-cval);
+                /*
+                  test, whether second arg is a subset of first
+                  returns:      
+                    1: yes, second arg is a subset of first arg
+                    0: no, second arg is not a subset of first arg
+                */
+                if ( bcp_IsSubsetCube(p, d, c) )
+                {
+                  // great, expand would be successful
+                  bcp_SetCubeVar(p, c, v, 3);  // expand the cube, by adding don't care to that variable
+                  //printf("v=%d success c\n", v);
+                }
+                else
+                {
+                  bcp_SetCubeVar(p, c, v, cval);  // revert variable
+                  bcp_SetCubeVar(p, d, v, 3-dval);
+                  if ( bcp_IsSubsetCube(p, c, d) )
+                  {
+                    // expand of d would be successful
+                    bcp_SetCubeVar(p, d, v, 3);  // expand the d cube, by adding don't care to that variable
+                    //printf("v=%d success d\n", v);
+                  }
+                  else
+                  {
+                    bcp_SetCubeVar(p, d, v, dval);  // revert variable
+                  }
+                }
+              }
+            }
+          } // j != i
+        } // j cube not deleted
+      } // j loop
+    } // i cube not deleted
+  } // i loop
+}
+
 
 /*
   with the cube at postion "pos" within "l", check whether there are any other cubes, which are a subset of the cobe at postion "pos"
@@ -2118,7 +2243,7 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
         {
           if ( bcp_CompareCube(p, c, bcp_GetBCLCube(p, cf1, j)) == 0 )
           {
-            /* the two cubes only differ in the selected variable, so extend the cube in cf1 and remove the cube from cf2 */
+            // the two cubes only differ in the selected variable, so extend the cube in cf1 and remove the cube from cf2
             bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf1, j), var_pos, 3);
             cf2->flags[i] = 1;  // remove the cube from cf2, so that it will not be added later by bcp_AddBCLCubesByBCL()
           }
@@ -2262,6 +2387,11 @@ void internalTest(int var_cnt)
   n = bcp_NewBCLComplementWithCofactor(p, r);
   printf("complement result size %d\n", n->cnt);
   assert( n->cnt != 0 );
+  
+  printf("simple expand\n");
+  bcp_DoBCLSimpleExpand(p, n);
+  bcp_DoBCLSingleCubeContainment(p, n);
+  printf("simple expand new size %d\n", n->cnt);
 
   printf("intersection test 3\n");
   bcp_IntersectionBCLs(p, m, n, r);
