@@ -108,6 +108,7 @@ void bcp_SetCubeVar(bcp p, bc c, unsigned var_pos, unsigned value);
 const char *bcp_GetStringFromCube(bcp p, bc c);
 void bcp_SetCubeByString(bcp p, bc c, const char *s);
 void bcp_CopyCube(bcp p, bc dest, bc src);
+int bcp_CompareCube(bcp p, bc a, bc b);
 int bcp_IsTautologyCube(bcp p, bc c);
 int bcp_IntersectionCube(bcp p, bc r, bc a, bc b); // returns 0, if there is no intersection
 int bcp_IsIllegal(bcp p, bc c);
@@ -448,6 +449,11 @@ void bcp_SetCubeByString(bcp p, bc c, const char *s)
 void bcp_CopyCube(bcp p, bc dest, bc src)
 {
   memcpy(dest, src, p->bytes_per_cube_cnt);
+}
+
+int bcp_CompareCube(bcp p, bc a, bc b)
+{
+  return memcmp((void *)a, (void *)b, p->bytes_per_cube_cnt);
 }
 
 
@@ -979,8 +985,9 @@ int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b)
   int i;
   for ( i = 0; i < b->cnt; i++ )
   {
-    if ( bcp_AddBCLCubeByCube(p, a, bcp_GetBCLCube(p, b, i)) < 0 )
-      return 0;
+    if ( b->flags[i] == 0 )
+      if ( bcp_AddBCLCubeByCube(p, a, bcp_GetBCLCube(p, b, i)) < 0 )
+        return 0;
   }
   return 1;
 }
@@ -2058,7 +2065,7 @@ bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l)
 bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
 {
   int var_pos;
-  int i;
+  int i, j;
   bcl f1;
   bcl f2;
   bcl cf1;
@@ -2097,13 +2104,36 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
     at this point the merging process should be much smarter
     at least we need to check, whether cubes can be recombined with each other
   */
+
+  /* do some simple merge, if the cube just differs in the selected variable */
+  for( i = 0; i < cf2->cnt; i++ )
+  {
+    if ( cf2->flags[i] == 0 )
+    {
+      bc c = bcp_GetBCLCube(p, cf2, i);
+      bcp_SetCubeVar(p, c, var_pos, 2);  
+      for( j = 0; j < cf1->cnt; j++ )
+      {
+        if ( i != j )
+        {
+          if ( bcp_CompareCube(p, c, bcp_GetBCLCube(p, cf1, j)) == 0 )
+          {
+            /* the two cubes only differ in the selected variable, so extend the cube in cf1 and remove the cube from cf2 */
+            bcp_SetCubeVar(p, bcp_GetBCLCube(p, cf1, j), var_pos, 3);
+            cf2->flags[i] = 1;  // remove the cube from cf2, so that it will not be added later by bcp_AddBCLCubesByBCL()
+          }
+        } // i != j
+      } // for cf1
+      bcp_SetCubeVar(p, c, var_pos, 1);  // undo the change in the cube from cf2
+    }
+  }
     
   if ( bcp_AddBCLCubesByBCL(p, cf1, cf2) == 0 )
     return  bcp_DeleteBCL(p, cf1), bcp_DeleteBCL(p, cf2), NULL;
 
   bcp_DeleteBCL(p, cf2);
 
-  bcp_DoBCLSingleCubeContainment(p, cf1);       // probably not required, because the two sets are disjunct....
+  //bcp_DoBCLSingleCubeContainment(p, cf1);       // probably not required, because the two sets are disjunct....
   
   return cf1;
 }
