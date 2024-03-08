@@ -118,6 +118,7 @@ void bcp_CopyCube(bcp p, bc dest, bc src);
 int bcp_CompareCube(bcp p, bc a, bc b);
 int bcp_IsTautologyCube(bcp p, bc c);
 int bcp_IntersectionCube(bcp p, bc r, bc a, bc b); // returns 0, if there is no intersection
+int bcp_IsIntersectionCube(bcp p, bc a, bc b); // returns 0, if there is no intersection
 int bcp_IsIllegal(bcp p, bc c);
 int bcp_GetCubeVariableCount(bcp p, bc cube);
 int bcp_GetCubeDelta(bcp p, bc a, bc b);
@@ -134,6 +135,8 @@ bc bcp_GetBCLCube(bcp p, bcl l, int pos);
 void bcp_ShowBCL(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
+void bcp_DoBCLSimpleExpand(bcp p, bcl l);
+void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);
 void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
 void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
 
@@ -511,6 +514,33 @@ int bcp_IntersectionCube(bcp p, bc r, bc a, bc b)
   return 0;
 }
 
+int bcp_IsIntersectionCube(bcp p, bc a, bc b)
+{
+  int i, cnt = p->blk_cnt;
+  __m128i z = _mm_loadu_si128(bcp_GetBCLCube(p, p->global_cube_list, 1));
+  __m128i rr;
+  uint16_t f = 0x0ffff;
+  for( i = 0; i < cnt; i++ )
+  {    
+    rr = _mm_and_si128(_mm_loadu_si128(a+i), _mm_loadu_si128(b+i));      // calculate the intersection
+    /*
+      each value has the bits illegal:00, zero:01, one:10, don't care:11
+      goal is to find, if there are any illegal variables bit pattern 00.
+      this is done with the following steps:
+        1. OR operation: r|r>>1 --> the lower bit will be 0 only, if we have the illegal var
+        2. AND operation with the zero mask --> so there will be only 00 (illegal) or 01 (not illegal)
+        3. CMP operation with the zero mask, the data size (epi16) does not matter here
+        4. movemask operation to see, whether the result is identical to the zero mask (if so, then the intersection exists)
+    
+        Short form: 00? --> x0 --> 00 == 00?
+    */    
+    f &= _mm_movemask_epi8(_mm_cmpeq_epi16(_mm_and_si128(_mm_or_si128( rr, _mm_srai_epi16(rr,1)), z), z));
+    if ( f != 0xffff )
+      return 0;
+  }
+  return 1;
+}
+
 /* returns 1, if cube "c" is illegal, return 0 if "c" is not illegal */
 int bcp_IsIllegal(bcp p, bc c)
 {
@@ -866,6 +896,39 @@ void bcp_DoBCLSimpleExpand(bcp p, bcl l)
       } // j loop
     } // i cube not deleted
   } // i loop
+}
+
+void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off)
+{
+  int i, j, v;
+  bc c;
+  int cval;
+  for( i = 0; i < l->cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      c = bcp_GetBCLCube(p, l, i);
+      for( v = 0; v < p->var_cnt; v++ )
+      {
+        cval = bcp_GetCubeVar(p, c, v);
+        if ( cval != 3 )
+        {
+          bcp_SetCubeVar(p, c, v, 3);
+          for( j = 0; j < off->cnt; j++ )
+          {
+            if ( off->flags[j] == 0 )
+            {
+              if ( bcp_IsIntersectionCube(p, c, bcp_GetBCLCube(p, off, j)) != 0 )
+              {
+                bcp_SetCubeVar(p, c, v, cval);    // there is an intersection with the off-set, so undo the don't care
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 
@@ -2266,7 +2329,8 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
 
   bcp_DeleteBCL(p, cf2);
 
-  bcp_DoBCLSimpleExpand(p, cf1);
+  //bcp_DoBCLSimpleExpand(p, cf1);
+  bcp_DoBCLExpandWithOffSet(p, cf1, l);
   bcp_DoBCLSingleCubeContainment(p, cf1);
 
   
@@ -2540,7 +2604,7 @@ int main1(void)
 int main(void)
 {
   
-  int cnt = 15;
+  int cnt = 18;
   clock_t t0, t1, t2;
   bcp p = bcp_New(cnt);
   bcl l = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt+10);
