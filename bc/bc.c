@@ -781,6 +781,32 @@ void bcp_PurgeBCL(bcp p, bcl l)
 }
 
 /*
+  return a list with the variable count for each cube in the list.
+  returns an allocated array, which must be free'd by the calling function
+*/
+int *bcp_GetBCLVarCntList(bcp p, bcl l)
+{
+  int i;
+  int *vcl = (int *)malloc(sizeof(int)*l->cnt);  
+  assert(l != NULL);
+  if ( vcl == NULL )
+    return NULL;
+  for( i = 0; i < l->cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      vcl[i] = bcp_GetCubeVariableCount(p, bcp_GetBCLCube(p,l,i));
+    }
+    else
+    {
+      vcl[i] = -1;
+    }
+  }
+  return vcl;
+}
+
+
+/*
   In the given BCL, ensure, that no cube is part of any other cube
   This will call bcp_PurgeBCL()
 */
@@ -789,11 +815,17 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   int i, j;
   int cnt = l->cnt;
   bc c;
+  int vc;
+  
+  int *vcl = bcp_GetBCLVarCntList(p, l);
+
+  
   for( i = 0; i < cnt; i++ )
   {
     if ( l->flags[i] == 0 )
     {
       c = bcp_GetBCLCube(p, l, i);
+      vc = vcl[i];
       for( j = 0; j < cnt; j++ )
       {
         if ( l->flags[j] == 0 )
@@ -805,26 +837,33 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
               returns:      
                 1: yes, "b" is a subset of "a"
                 0: no, "b" is not a subset of "a"
+              A mandatory condition for this is, that b has more variables than a
             */
-            if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
+            if ( vcl[j] >= vc )
             {
-              l->flags[j] = 1;      // mark the j cube as deleted
-            }            
+              if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
+              {
+                l->flags[j] = 1;      // mark the j cube as deleted
+              }
+            }
           } // j != i
         } // j cube not deleted
       } // j loop
     } // i cube not deleted
   } // i loop
   bcp_PurgeBCL(p, l);
+  free(vcl);
 }
 
 
 /*
   try to expand cubes into another cube
+  includes bcp_DoBCLSingleCubeContainment
 */
 void bcp_DoBCLSimpleExpand(bcp p, bcl l)
 {
   int i, j, v;
+  int k;
   int cnt = l->cnt;
   int delta;
   int cval, dval;
@@ -871,6 +910,18 @@ void bcp_DoBCLSimpleExpand(bcp p, bcl l)
                   // great, expand would be successful
                   bcp_SetCubeVar(p, c, v, 3);  // expand the cube, by adding don't care to that variable
                   //printf("v=%d success c\n", v);
+
+                  /* check whether other cubes are covered by the new cube */
+                  for( k = 0; k < cnt; k++ )
+                  {
+                    if ( k != j && k != i && l->flags[k] == 0)
+                    {
+                      if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, k)) != 0 )
+                      {
+                        l->flags[k] = 1;      // mark the k cube as deleted
+                      }
+                    }
+                  } // for k
                 }
                 else
                 {
@@ -881,6 +932,16 @@ void bcp_DoBCLSimpleExpand(bcp p, bcl l)
                     // expand of d would be successful
                     bcp_SetCubeVar(p, d, v, 3);  // expand the d cube, by adding don't care to that variable
                     //printf("v=%d success d\n", v);
+                    for( k = 0; k < cnt; k++ )
+                    {
+                      if ( k != j && k != i && l->flags[k] == 0)
+                      {
+                        if ( bcp_IsSubsetCube(p, d, bcp_GetBCLCube(p, l, k)) != 0 )
+                        {
+                          l->flags[k] = 1;      // mark the k cube as deleted
+                        }
+                      }
+                    } // for k
                   }
                   else
                   {
@@ -894,6 +955,7 @@ void bcp_DoBCLSimpleExpand(bcp p, bcl l)
       } // j loop
     } // i cube not deleted
   } // i loop
+  bcp_PurgeBCL(p, l);
 }
 
 void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off)
@@ -932,7 +994,7 @@ void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off)
 
 /*
   with the cube at postion "pos" within "l", check whether there are any other cubes, which are a subset of the cobe at postion "pos"
-  The cubes, which are marked as subset are not deleted. This is done by a later call to bcp_BCLPurge()
+  The cubes, which are marked as subset are not deleted. This should done by a later call to bcp_BCLPurge()
 */
 void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos)
 {
@@ -965,7 +1027,8 @@ void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos)
 */
 void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
 {
-  int i, j;
+  int i;
+  //int j;
   unsigned bb;
   unsigned orig_aa;
   unsigned new_aa;
@@ -981,20 +1044,24 @@ void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
       if ( new_aa != 0 )
       {
         bcp_SetCubeVar(p, a, i, new_aa);        // modify a 
-        /* todo: a will be smaller, so we need to check, whether a is already a subcube of any cube in l */
-        for( j = 0; j < l->cnt; j++ )
+        /* todo: a will be smaller, so we need to check, whether a is already a subcube of any cube in l *///#define test
+#ifdef THIS_DOES_NOT_INCREASE_PERFORMANCE_AND_RESULTS
+        for( int j = 0; j < l->cnt; j++ )
         {
           /*
-            test, whether second cobe is a subset of the first cube
+            test, whether second cube is a subset of the first cube
             returns:      
               1: yes, second is a subset of first cube
               0: no, second cube is not a subset of first cube
           */
           if ( bcp_IsSubsetCube(p, bcp_GetBCLCube(p, l, j), a) != 0 )
+          {
             break;
+          }
         }
         if ( j == l->cnt )
-          /*pos = */ bcp_AddBCLCubeByCube(p, l, a); // add the modified a cube to the list
+#endif
+          /*pos = */ bcp_AddBCLCubeByCube(p, l, a); // if a is not subcube of any existing cube, then add the modified a cube to the list
         bcp_SetCubeVar(p, a, i, orig_aa);        // undo the modification
         //bcp_DoBCLSubsetCubeMark(p, l, pos);             // not sure, whether this will be required
       }
@@ -1098,28 +1165,11 @@ void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value
         {
           bcp_SetCubeVar(p, c, var_pos, 3);   // yes, variable will become don't care
           bcp_DoBCLSubsetCubeMark(p, l, i);
-
-          /*
-          for( j = 0; j < cnt; j++ )
-          {
-            if ( j != i && l->flags[j] == 0  )
-            {
-              if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
-              {
-                l->flags[j] = 1;      // mark the j cube as covered (to be deleted)
-              }            
-            }
-          }
-          */
-          
         } // check for "becomes don't care'
       } // check for not don't care
     }
   } // i loop
   bcp_PurgeBCL(p, l);  // cleanup for bcp_DoBCLSubsetCubeMark()
-  
-  //printf("bcp_DoBCLOneVariableCofactor post\n");
-  //bcp_ShowBCL(p, l);
 }
 
 bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value)
@@ -2009,6 +2059,90 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
   return max_sum_var;
 }
 
+/*
+  this differs from 
+    bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
+  by also considering unate variables
+
+NOT TESTED
+*/
+
+int bcp_GetBCLMaxSplitVariable(bcp p, bcl l)
+{
+  int max_sum_cnt = -1;
+  int max_sum_var = -1;
+  int i, b;
+  __m128i z;
+  __m128i o;
+  
+  __m128i c_cmp = _mm_setzero_si128();
+  __m128i c_max = _mm_setzero_si128();
+  __m128i c_idx = _mm_setzero_si128();
+  __m128i c_max_idx = _mm_setzero_si128();
+  
+  uint16_t m_base_idx[8] = { 0, 8, 16, 24,  32, 40, 48, 56 };
+  uint16_t m_base_inc[8] = { 1, 1, 1, 1,   1, 1, 1, 1 };
+  
+  uint16_t m_idx[8];
+  uint16_t m_max[8];
+  
+  bc zero_cnt_cube[8];
+  bc one_cnt_cube[8];
+
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  zero_cnt_cube[4] = bcp_GetGlobalCube(p, 8);
+  zero_cnt_cube[5] = bcp_GetGlobalCube(p, 9);
+  zero_cnt_cube[6] = bcp_GetGlobalCube(p, 10);
+  zero_cnt_cube[7] = bcp_GetGlobalCube(p, 11);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 12);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 13);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 14);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 15);
+  one_cnt_cube[4] = bcp_GetGlobalCube(p, 16);
+  one_cnt_cube[5] = bcp_GetGlobalCube(p, 17);
+  one_cnt_cube[6] = bcp_GetGlobalCube(p, 18);
+  one_cnt_cube[7] = bcp_GetGlobalCube(p, 19);
+
+  for( b = 0; b < p->blk_cnt; b++ )
+  {
+      c_idx = _mm_loadu_si128((__m128i *)m_base_idx);
+      c_max = _mm_setzero_si128();
+      c_max_idx = _mm_setzero_si128();
+    
+      for( i = 0; i < 8; i++ )
+      {
+        z = _mm_loadu_si128(zero_cnt_cube[i]+b);
+        o = _mm_loadu_si128(one_cnt_cube[i]+b);
+
+        // calculate the sum of both counts and store the sum in z, o is not required any more
+        z = _mm_adds_epi16(z, o);
+
+        c_cmp = _mm_cmplt_epi16( c_max, z );
+
+        c_max = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max), _mm_and_si128(c_cmp, z) );                        // update max value if required
+        c_max_idx = _mm_or_si128( _mm_andnot_si128(c_cmp, c_max_idx), _mm_and_si128(c_cmp, c_idx) );    // update index value if required        
+        
+        c_idx = _mm_adds_epu16(c_idx, _mm_loadu_si128((__m128i *)m_base_inc));   // we just add 1 to the value, so the highest value per byte is 64
+      }
+      
+      _mm_storeu_si128( (__m128i *)m_max, c_max );
+      _mm_storeu_si128( (__m128i *)m_idx, c_max_idx );
+      for( i = 0; i < 8; i++ )
+        if ( m_max[i] > 0 )
+          if ( max_sum_cnt < m_max[i] )
+          {
+            max_sum_cnt = m_max[i];
+            max_sum_var = m_idx[i] + b*p->vars_per_blk_cnt;
+          }
+  }
+  return max_sum_var;
+}
+
 
 /*
   Precondition: call to 
@@ -2256,31 +2390,38 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   bcl f2;
   bcl cf1;
   bcl cf2;
+ 
+  /*
+  if ( l->cnt <= 14 )
+  {
+    return bcp_NewBCLComplementWithSubtract(p, l);
+  }
+  */
+    
   
   bcp_CalcBCLBinateSplitVariableTable(p, l);
   var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
-    
   if ( var_pos < 0 )
   {
-    return bcp_NewBCLComplementWithSubtract(p, l);
+    bcl n = bcp_NewBCLComplementWithSubtract(p, l);
+    //printf("%d->%d ", l->cnt, n->cnt);
+    return n;
   }
   
   f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
   assert(f1 != NULL);
   bcp_DoBCLSimpleExpand(p, f1);
-  bcp_DoBCLSingleCubeContainment(p, f1);
+  //bcp_DoBCLSingleCubeContainment(p, f1);
   
   f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
   assert(f2 != NULL);
   bcp_DoBCLSimpleExpand(p, f2);
-  bcp_DoBCLSingleCubeContainment(p, f2);
+  //bcp_DoBCLSingleCubeContainment(p, f2);
   
   cf1 = bcp_NewBCLComplementWithCofactor(p, f1);
   assert(cf1 != NULL);
   cf2 = bcp_NewBCLComplementWithCofactor(p, f2);
   assert(cf2 != NULL);
-  bcp_DeleteBCL(p, f1);
-  bcp_DeleteBCL(p, f2);
   
   for( i = 0; i < cf1->cnt; i++ )
     if ( cf1->flags[i] == 0 )
@@ -2321,7 +2462,10 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
       bcp_SetCubeVar(p, c, var_pos, 1);  // undo the change in the cube from cf2
     }
   }
-    
+
+  bcp_DeleteBCL(p, f1);
+  bcp_DeleteBCL(p, f2);
+  
   if ( bcp_AddBCLCubesByBCL(p, cf1, cf2) == 0 )
     return  bcp_DeleteBCL(p, cf1), bcp_DeleteBCL(p, cf2), NULL;
 
@@ -2463,7 +2607,7 @@ void internalTest(int var_cnt)
   
   printf("simple expand\n");
   bcp_DoBCLSimpleExpand(p, n);
-  bcp_DoBCLSingleCubeContainment(p, n);
+  //bcp_DoBCLSingleCubeContainment(p, n);
   printf("simple expand new size %d\n", n->cnt);
 
   printf("intersection test 3\n");
