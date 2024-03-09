@@ -138,12 +138,13 @@ void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);
 void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
 void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
 
-void bcp_SubtractBCL(bcp p, bcl a, bcl b);
+void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);
 int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b);
 int bcp_IntersectionBCL(bcp p, bcl a, bcl b);
 
-void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value);  // calculate cofactor for a list, called by "bcp_NewBCLCofacter"
-bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value);         // create a new list, which is the cofactor from "l"
+bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value);         // create a new list, which is the cofactor from "l"
+bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);
+
 int bcp_AddBCLCube(bcp p, bcl l);
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c);
 int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b);
@@ -152,7 +153,7 @@ int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s);
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l);
 int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l);
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
-int bcp_IsBCLUnate(bcp p);
+int bcp_IsBCLUnate(bcp p);  // requires call to bcp_CalcBCLBinateSplitVariableTable
 
 int bcp_IsBCLTautology(bcp p, bcl l);
 bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);
@@ -855,6 +856,48 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   free(vcl);
 }
 
+/*
+  IRREDUNDANT 
+*/
+void bcp_DoBCLMultiCubeContainment(bcp p, bcl l)
+{
+  int i;
+  int *vcl = bcp_GetBCLVarCntList(p, l);
+  int min = p->var_cnt;
+  int max = 0;
+  int vc;
+
+  for( i = 0; i < l->cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      if ( min > vcl[i] )
+        min = vcl[i];
+      if ( max < vcl[i] )
+        max = vcl[i];
+    }
+  }
+
+  for( vc = max; vc >= min; vc-- )      // it seems to be faster to start checking the smallest cubes first
+  {
+    for( i = 0; i < l->cnt; i++ )
+    {
+      if ( l->flags[i] == 0 && vcl[i] == vc )
+      {
+        bcl n = bcp_NewBCLCofactorByCube(p, l, bcp_GetBCLCube(p, l, i), i);
+        if ( bcp_IsBCLTautology(p, n) != 0 )
+        {
+          l->flags[i] = 1;
+        }
+        bcp_DeleteBCL(p, n);
+      } // i cube not deleted
+    } // i loop
+  } // vc loop
+  free(vcl);
+  bcp_PurgeBCL(p, l);
+  
+}
+
 
 /*
   try to expand cubes into another cube
@@ -1070,8 +1113,11 @@ void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
 }
 
 
-/* a = a - b */
-void bcp_SubtractBCL(bcp p, bcl a, bcl b)
+/* a = a - b 
+  is_mcc: whether to execute multi cube containment or not
+  if b is unate, then executing mcc slows down the substract, otherwise if b is binate, then using mcc increases performance
+*/
+void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc)
 {
   int i, j;
   bcl result = bcp_NewBCL(p);
@@ -1084,6 +1130,8 @@ void bcp_SubtractBCL(bcp p, bcl a, bcl b)
     }
     bcp_CopyBCL(p, a, result);
     bcp_DoBCLSingleCubeContainment(p, a);
+    if ( is_mcc )
+      bcp_DoBCLMultiCubeContainment(p, a);
   }
   bcp_DeleteBCL(p, result);
 }
@@ -1172,7 +1220,7 @@ void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value
   bcp_PurgeBCL(p, l);  // cleanup for bcp_DoBCLSubsetCubeMark()
 }
 
-bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value)
+bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value)
 {
   bcl n = bcp_NewBCLByBCL(p, l);
   if ( n == NULL )
@@ -1180,6 +1228,52 @@ bcl bcp_NewBCLCofacter(bcp p, bcl l, unsigned var_pos, unsigned value)
   bcp_DoBCLOneVariableCofactor(p, n, var_pos, value);
   return n;
 }
+
+
+/*
+  Calculate the cofactor of l against c
+  c might be part of l
+  additionally ignore the element at position exclude (which is assumed to be c)
+  exclude can be negative
+*/
+void bcp_DoBCLCofactorByCube(bcp p, bcl l, bc c, int exclude)
+{
+  int i;
+  int b;
+  bc lc;
+  __m128i cc;
+  __m128i dc;
+  
+  dc = _mm_loadu_si128(bcp_GetGlobalCube(p, 3));
+  
+  if ( exclude >= 0 )
+    l->flags[exclude] = 1;
+  
+  for( b = 0; b < p->blk_cnt; b++ )
+  {
+    cc = _mm_andnot_si128( _mm_loadu_si128(c+b), dc);
+    
+    for( i = 0; i < l->cnt; i++ )
+    {
+      if ( l->flags[i] == 0 )
+      {
+        lc = bcp_GetBCLCube(p, l, i);
+        _mm_storeu_si128(lc+b,  _mm_or_si128(cc, _mm_loadu_si128(lc+b)));
+      }
+    }
+  }
+  bcp_DoBCLSingleCubeContainment(p, l);
+}
+
+bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude)
+{
+  bcl n = bcp_NewBCLByBCL(p, l);
+  if ( n == NULL )
+    return NULL;
+  bcp_DoBCLCofactorByCube(p, n, c, exclude);
+  return n;
+}
+
 
 
 
@@ -1346,6 +1440,8 @@ void bcp_CalcBCLBinateSplitVariableTable8(bcp p, bcl l)
 		
 		for( j = 0; j < list_cnt; j++ )
 		{
+                  if ( l->flags[j] == 0 )
+                  {
 			/*
 				Goal: 
 					Count, how often 01 (zero) and 10 (one) do appear in the list at a specific cube position
@@ -1417,6 +1513,7 @@ void bcp_CalcBCLBinateSplitVariableTable8(bcp p, bcl l)
 		_mm_storeu_si128(one_cnt_cube[1] + i, oc1);
 		_mm_storeu_si128(one_cnt_cube[2] + i, oc2);
 		_mm_storeu_si128(one_cnt_cube[3] + i, oc3);
+          }
 	}
 	
         /* 
@@ -1496,6 +1593,8 @@ void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 		
 		for( j = 0; j < list_cnt; j++ )
 		{
+                  if ( l->flags[j] == 0 )
+                  {
 			/*
 				Goal: 
 					Count, how often 01 (zero) and 10 (one) do appear in the list at a specific cube position
@@ -1618,7 +1717,7 @@ void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
           According to R. Rudell in "Multiple-Valued Logic Minimization for PLA Synthesis" this should be the
           variable with the highest value of one_cnt + zero_cnt
         */
-        
+      }
 }
 
 /*
@@ -2298,6 +2397,7 @@ int bcp_IsBCLUnate(bcp p)
   return 1;
 }
 
+
 // the unate check is faster than the split var calculation, but if the BCL is binate, then both calculations have to be done
 // so the unate precheck does not improve performance soo much (maybe 5%)
 //#define BCL_TAUTOLOGY_WITH_UNATE_PRECHECK
@@ -2353,8 +2453,8 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   */
 
   assert( var_pos >= 0 );
-  f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
-  f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
+  f1 = bcp_NewBCLCofacterByVariable(p, l, var_pos, 1);
+  f2 = bcp_NewBCLCofacterByVariable(p, l, var_pos, 2);
   assert( f1 != NULL );
   assert( f2 != NULL );
 
@@ -2372,17 +2472,29 @@ int bcp_IsBCLTautology(bcp p, bcl l)
   return bcp_IsBCLTautologySub(p, l, 0);
 }
 
-
+/*
+  looks like the complement with substract is much faster. than the cofactor version
+*/
 bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l)
 {
     bcl result = bcp_NewBCL(p);
+    int is_mcc = 1;
+    bcp_CalcBCLBinateSplitVariableTable(p, l);
+    if ( bcp_IsBCLUnate(p) )
+      is_mcc = 0;
     bcp_AddBCLCubeByCube(p, result, bcp_GetGlobalCube(p, 3));  // "result" contains the universal cube
-    bcp_SubtractBCL(p, result, l);             // "result" contains the negation of "l"
+    bcp_SubtractBCL(p, result, l, is_mcc);             // "result" contains the negation of "l"
+    
+    // do a small minimization step
+    bcp_DoBCLExpandWithOffSet(p, result, l);
+    bcp_DoBCLMultiCubeContainment(p, result);
+
     return result;
 }
 
 
-bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
+
+bcl bcp_NewBCLComplementWithCofactorSub(bcp p, bcl l)
 {
   int var_pos;
   int i, j;
@@ -2403,24 +2515,26 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);
   if ( var_pos < 0 )
   {
-    bcl n = bcp_NewBCLComplementWithSubtract(p, l);
-    //printf("%d->%d ", l->cnt, n->cnt);
-    return n;
+    bcl result = bcp_NewBCL(p);
+    bcp_AddBCLCubeByCube(p, result, bcp_GetGlobalCube(p, 3));  // "result" contains the universal cube
+    bcp_SubtractBCL(p, result, l, 0);             // "result" contains the negation of "l"
+    return result;
+    /* return bcp_NewBCLComplementWithSubtract(p, l); */
   }
   
-  f1 = bcp_NewBCLCofacter(p, l, var_pos, 1);
+  f1 = bcp_NewBCLCofacterByVariable(p, l, var_pos, 1);
   assert(f1 != NULL);
   bcp_DoBCLSimpleExpand(p, f1);
   //bcp_DoBCLSingleCubeContainment(p, f1);
   
-  f2 = bcp_NewBCLCofacter(p, l, var_pos, 2);
+  f2 = bcp_NewBCLCofacterByVariable(p, l, var_pos, 2);
   assert(f2 != NULL);
   bcp_DoBCLSimpleExpand(p, f2);
   //bcp_DoBCLSingleCubeContainment(p, f2);
   
-  cf1 = bcp_NewBCLComplementWithCofactor(p, f1);
+  cf1 = bcp_NewBCLComplementWithCofactorSub(p, f1);
   assert(cf1 != NULL);
-  cf2 = bcp_NewBCLComplementWithCofactor(p, f2);
+  cf2 = bcp_NewBCLComplementWithCofactorSub(p, f2);
   assert(cf2 != NULL);
   
   for( i = 0; i < cf1->cnt; i++ )
@@ -2474,11 +2588,20 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   //bcp_DoBCLSimpleExpand(p, cf1);
   bcp_DoBCLExpandWithOffSet(p, cf1, l);
   bcp_DoBCLSingleCubeContainment(p, cf1);
-
-  
   
   return cf1;
 }
+
+/*
+  better use "bcp_NewBCLComplementWithSubtract()"
+*/
+bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
+{
+  bcl n = bcp_NewBCLComplementWithCofactorSub(p, l);
+  bcp_DoBCLMultiCubeContainment(p, n);
+  return n;
+}
+
 
 /*============================================================*/
 
@@ -2553,7 +2676,7 @@ void internalTest(int var_cnt)
   assert(tautology != 0);
 
   printf("subtract test 1\n");
-  bcp_SubtractBCL(p, l, t);
+  bcp_SubtractBCL(p, l, t, 1);
   assert( l->cnt == 0 );
 
   printf("tautology test 3\n");
@@ -2563,7 +2686,7 @@ void internalTest(int var_cnt)
   printf("subtract test 2\n");
   bcp_ClearBCL(p, l);
   bcp_AddBCLCubeByCube(p, l, bcp_GetGlobalCube(p, 3));  // "l" contains the universal cube
-  bcp_SubtractBCL(p, l, r);             // "l" contains the negation of "r"
+  bcp_SubtractBCL(p, l, r, 1);             // "l" contains the negation of "r"
   printf("subtract result size %d\n", l->cnt);
   assert( l->cnt != 0 );
 
@@ -2583,7 +2706,7 @@ void internalTest(int var_cnt)
   bcp_CopyBCL(p, l, t);
   assert( l->cnt == t->cnt );
   printf("subtract test 3\n");          // repeat the subtract test with "r", use the tautology list "t" instead of the universal cube
-  bcp_SubtractBCL(p, l, r);             // "l" contains the negation of "r"
+  bcp_SubtractBCL(p, l, r, 1);             // "l" contains the negation of "r"
   assert( l->cnt != 0 );
   printf("intersection test 2\n");
   bcp_IntersectionBCLs(p, m, l, r);
@@ -2679,7 +2802,7 @@ int mainy(void)
   bcl m = bcp_NewBCL(p);
   bcp_AddBCLCubesByString(p, l, cubes_string);
   bcp_AddBCLCubeByCube(p, m, bcp_GetGlobalCube(p, 3));
-  bcp_SubtractBCL(p, m, l);
+  bcp_SubtractBCL(p, m, l, 1);
   
   puts("original:");
   bcp_ShowBCL(p, l);
@@ -2691,7 +2814,7 @@ int mainy(void)
 
   bcp_ClearBCL(p, m);
   bcp_AddBCLCubeByCube(p, m, bcp_GetGlobalCube(p, 3));
-  bcp_SubtractBCL(p, m, l);
+  bcp_SubtractBCL(p, m, l, 1);
   
   bcp_AddBCLCubesByBCL(p, m, l);        // add l to m
   printf("tautology=%d\n", bcp_IsBCLTautology(p, m));   // do a tautology test on the union
@@ -2710,32 +2833,33 @@ int mainy(void)
 int main1(void)
 {
   char *s = 
-"-0-1\n"
-"1-0-\n"
-"-1--\n"
-"0--1\n"
+"-11\n"
+"110\n"
+"11-\n"
+"0--\n"
   ;
   
   bcp p = bcp_New(bcp_GetVarCntFromString(s));
   bcl l = bcp_NewBCL(p);
-  bcl n;
-  bcl m;
+  //bcl n;
 
   bcp_AddBCLCubesByString(p, l, s);
-
   puts("original:");
   bcp_ShowBCL(p, l);
 
-  n = bcp_NewBCLComplementWithSubtract(p, l);
-  puts("complement with subtract:");
+  //n = bcp_NewBCLCofactorByCube(p, l, bcp_GetBCLCube(p, l, 2), 2);
+  bcp_DoBCLMultiCubeContainment(p, l);
+
+  puts("MCC:");
+  bcp_ShowBCL(p, l);
+  /*
+  puts("cofactor:");
   bcp_ShowBCL(p, n);
-  
-  m = bcp_NewBCLComplementWithCofactor(p, l);
-  puts("complement with cofactor:");
-  bcp_ShowBCL(p, m);
+  printf("tautology=%d\n", bcp_IsBCLTautology(p, n));   // do a tautology test 
+  */
   
   bcp_DeleteBCL(p,  l);
-  bcp_DeleteBCL(p,  n);
+  //bcp_DeleteBCL(p,  n);
 
   bcp_Delete(p);  
   return 0;
@@ -2746,10 +2870,10 @@ int main1(void)
 int main(void)
 {
   
-  int cnt = 18;
-  clock_t t0, t1, t2;
+  int cnt = 18;         // crash??? because of tautology depth
+  clock_t t0, t1;
   bcp p = bcp_New(cnt);
-  bcl l = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt+10);
+  bcl l = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
   bcl n;
   bcl m;
   
@@ -2757,21 +2881,29 @@ int main(void)
   //bcp_ShowBCL(p, l);
 
   t0 = clock();
-  //n = bcp_NewBCLComplementWithSubtract(p, l);
-  
+  n = bcp_NewBCLComplementWithSubtract(p, l);
+  t1 = clock();  
+  printf("complement with subtract: cnt=%d clock=%ld\n", n->cnt, t1-t0);  
+  /*
+  t0 = clock();
+  bcp_DoBCLMultiCubeContainment(p, n);
   t1 = clock();
-  //printf("complement with subtract: cnt=%d clock=%ld\n", n->cnt, t1-t0);
-  //puts("complement with subtract:");
-  //bcp_ShowBCL(p, n);
+  printf("complement with subtract MCC: cnt=%d clock=%ld\n", n->cnt, t1-t0);
   
+  t0 = clock();
   m = bcp_NewBCLComplementWithCofactor(p, l);
-  t2 = clock();
-  printf("complement with cofactor: cnt=%d clock=%ld\n", m->cnt, (t2-t1));
-  //bcp_ShowBCL(p, m);
+  t1 = clock();
+  printf("complement with cofactor: cnt=%d clock=%ld\n", m->cnt, (t1-t0));
+  
+  t0 = clock();
+  bcp_DoBCLMultiCubeContainment(p, m);
+  t1 = clock();
+  printf("complement with cofactor MCC: cnt=%d clock=%ld\n", m->cnt, (t1-t0));
+  */
   
   bcp_DeleteBCL(p,  l);
-  //bcp_DeleteBCL(p,  n);
-  bcp_DeleteBCL(p,  m);
+  bcp_DeleteBCL(p,  n);
+  //bcp_DeleteBCL(p,  m);
 
   bcp_Delete(p);  
   
