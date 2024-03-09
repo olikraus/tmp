@@ -127,11 +127,9 @@ bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
 int bcp_CopyBCL(bcp p, bcl a, bcl b);
 void bcp_DeleteBCL(bcp p, bcl l);
-bc bcp_GetBCLCube(bcp p, bcl l, int pos);
-/*
+//bc bcp_GetBCLCube(bcp p, bcl l, int pos);
 #define bcp_GetBCLCube(p, l, pos) \
   (bc)(((uint8_t *)((l)->list)) + (pos) * (p)->bytes_per_cube_cnt)
-  */
 void bcp_ShowBCL(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
@@ -2615,10 +2613,10 @@ int main(void)
   //bcp_ShowBCL(p, l);
 
   t0 = clock();
-  n = bcp_NewBCLComplementWithSubtract(p, l);
+  //n = bcp_NewBCLComplementWithSubtract(p, l);
   
   t1 = clock();
-  printf("complement with subtract: cnt=%d clock=%ld\n", n->cnt, t1-t0);
+  //printf("complement with subtract: cnt=%d clock=%ld\n", n->cnt, t1-t0);
   //puts("complement with subtract:");
   //bcp_ShowBCL(p, n);
   
@@ -2628,12 +2626,12 @@ int main(void)
   //bcp_ShowBCL(p, m);
   
   bcp_DeleteBCL(p,  l);
-  bcp_DeleteBCL(p,  n);
+  //bcp_DeleteBCL(p,  n);
   bcp_DeleteBCL(p,  m);
 
   bcp_Delete(p);  
   
-  internalTest(19);
+  //internalTest(19);
   
   return 0;
 }
