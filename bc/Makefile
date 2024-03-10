@@ -2,7 +2,7 @@
 # CFLAGS = -O4 -march=silvermont -Wall
 CFLAGS = -g -pg -Wall
 
-SRC = bc.c
+SRC = bc.c bcp.c bcube.c
 
 OBJ = $(SRC:.c=.o)
 
