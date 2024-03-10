@@ -133,17 +133,20 @@ void bcp_DeleteBCL(bcp p, bcl l);
 void bcp_ShowBCL(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
+int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c);           // is cube c a subset of l (is cube c covered by l)
+int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos);      // is the cube at pos in l covered by all other cubes in l
+void bcp_DoBCLMultiCubeContainment(bcp p, bcl l);
 void bcp_DoBCLSimpleExpand(bcp p, bcl l);
 void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);
 void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
 void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
 
 void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);
-int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b);
-int bcp_IntersectionBCL(bcp p, bcl a, bcl b);
+int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b); // result = a intersection with b
+int bcp_IntersectionBCL(bcp p, bcl a, bcl b);   // a = a intersection with b 
 
 bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value);         // create a new list, which is the cofactor from "l"
-bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);
+bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);          // don't use this fn, use bcp_IsBCLCubeRedundant() or bcp_IsBCLCubeCovered() instead
 
 int bcp_AddBCLCube(bcp p, bcl l);
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c);
@@ -156,6 +159,8 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
 int bcp_IsBCLUnate(bcp p);  // requires call to bcp_CalcBCLBinateSplitVariableTable
 
 int bcp_IsBCLTautology(bcp p, bcl l);
+int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a"
+int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
 bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);
 bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l);
 
@@ -857,6 +862,30 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
 }
 
 /*
+  checks, whether the given cube "c" is a subset (covered) of the list "l"
+  cube "c" must not be physical part of the list. if this is the case use bcp_IsBCLCubeRedundant() instead
+  
+*/
+int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c)
+{
+  bcl n = bcp_NewBCLCofactorByCube(p, l, c, -1);
+  int result = bcp_IsBCLTautology(p, n);
+  bcp_DeleteBCL(p, n);
+  return result;
+}
+
+/*
+  checks, whether the cube at position "pos" is a subset of all other cubes in the same list.
+*/
+int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos)
+{
+  bcl n = bcp_NewBCLCofactorByCube(p, l, bcp_GetBCLCube(p, l, pos), pos);
+  int result = bcp_IsBCLTautology(p, n);
+  bcp_DeleteBCL(p, n);
+  return result;
+}
+
+/*
   IRREDUNDANT 
 */
 void bcp_DoBCLMultiCubeContainment(bcp p, bcl l)
@@ -884,12 +913,11 @@ void bcp_DoBCLMultiCubeContainment(bcp p, bcl l)
     {
       if ( l->flags[i] == 0 && vcl[i] == vc )
       {
-        bcl n = bcp_NewBCLCofactorByCube(p, l, bcp_GetBCLCube(p, l, i), i);
-        if ( bcp_IsBCLTautology(p, n) != 0 )
+        if ( bcp_IsBCLCubeRedundant(p, l, i) )
         {
           l->flags[i] = 1;
         }
-        bcp_DeleteBCL(p, n);
+        
       } // i cube not deleted
     } // i loop
   } // vc loop
@@ -1071,7 +1099,6 @@ void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos)
 void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
 {
   int i;
-  //int j;
   unsigned bb;
   unsigned orig_aa;
   unsigned new_aa;
@@ -1087,26 +1114,8 @@ void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
       if ( new_aa != 0 )
       {
         bcp_SetCubeVar(p, a, i, new_aa);        // modify a 
-        /* todo: a will be smaller, so we need to check, whether a is already a subcube of any cube in l *///#define test
-#ifdef THIS_DOES_NOT_INCREASE_PERFORMANCE_AND_RESULTS
-        for( int j = 0; j < l->cnt; j++ )
-        {
-          /*
-            test, whether second cube is a subset of the first cube
-            returns:      
-              1: yes, second is a subset of first cube
-              0: no, second cube is not a subset of first cube
-          */
-          if ( bcp_IsSubsetCube(p, bcp_GetBCLCube(p, l, j), a) != 0 )
-          {
-            break;
-          }
-        }
-        if ( j == l->cnt )
-#endif
-          /*pos = */ bcp_AddBCLCubeByCube(p, l, a); // if a is not subcube of any existing cube, then add the modified a cube to the list
+        bcp_AddBCLCubeByCube(p, l, a); // if a is not subcube of any existing cube, then add the modified a cube to the list
         bcp_SetCubeVar(p, a, i, orig_aa);        // undo the modification
-        //bcp_DoBCLSubsetCubeMark(p, l, pos);             // not sure, whether this will be required
       }
     }
   }
@@ -2491,6 +2500,44 @@ int bcp_IsBCLTautology(bcp p, bcl l)
 }
 
 /*
+  test, whether "b" is a subset of "a"
+  returns:      
+    1: yes, "b" is a subset of "a"
+    0: no, "b" is not a subset of "a"
+
+  this function is much faster than the substract version!
+
+*/
+int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b)
+{
+  int i;
+  for( i = 0; i < b->cnt; i++ )
+  {
+    if ( bcp_IsBCLCubeCovered(p, a, bcp_GetBCLCube(p, b, i)) == 0 )
+      return 0;
+  }
+  return 1;
+}
+
+/*
+  test, whether "b" is a subset of "a"
+  returns:      
+    1: yes, "b" is a subset of "a"
+    0: no, "b" is not a subset of "a"
+*/
+int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b)
+{
+  int result = 0;
+  bcl tmp = bcp_NewBCLByBCL(p, b);  
+  bcp_SubtractBCL(p, tmp, a, /* is_mcc */ 1);
+  if ( tmp->cnt == 0 )
+    result = 1;
+  bcp_DeleteBCL(p, tmp);
+  return result;
+}
+
+
+/*
   looks like the complement with substract is much faster. than the cofactor version
 */
 bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l)
@@ -2888,40 +2935,86 @@ int main1(void)
 int main(void)
 {
   
-  int cnt = 18;
+  int cnt = 71;
+  int is_subset = 0;
   clock_t t0, t1;
   bcp p = bcp_New(cnt);
-  bcl l = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
-  bcl n;
-  bcl m;
+  bcl a = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
+  bcl b = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
+  bcl ic = bcp_NewBCL(p);
+  
+  
+  bcp_IntersectionBCLs(p, ic, a, b);
+  assert( ic->list != 0 );
   
   //puts("original:");
   //bcp_ShowBCL(p, l);
 
   t0 = clock();
-  n = bcp_NewBCLComplementWithSubtract(p, l);
+  //is_subset = bcp_IsBCLSubsetWithSubstract(p, a, ic);
   t1 = clock();  
-  printf("complement with subtract: cnt=%d clock=%ld\n", n->cnt, t1-t0);  
-  /*
+  //printf("bcp_IsBCLSubsetWithSubstract(p, a, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
   t0 = clock();
-  bcp_DoBCLMultiCubeContainment(p, n);
-  t1 = clock();
-  printf("complement with subtract MCC: cnt=%d clock=%ld\n", n->cnt, t1-t0);
-  
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, a, ic);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, a, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
   t0 = clock();
-  m = bcp_NewBCLComplementWithCofactor(p, l);
-  t1 = clock();
-  printf("complement with cofactor: cnt=%d clock=%ld\n", m->cnt, (t1-t0));
-  
+  //is_subset = bcp_IsBCLSubsetWithSubstract(p, ic, a);
+  t1 = clock();  
+  //printf("bcp_IsBCLSubsetWithSubstract(p, ic, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
   t0 = clock();
-  bcp_DoBCLMultiCubeContainment(p, m);
-  t1 = clock();
-  printf("complement with cofactor MCC: cnt=%d clock=%ld\n", m->cnt, (t1-t0));
-  */
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, ic, a);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, ic, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+
+  t0 = clock();
+  //is_subset = bcp_IsBCLSubsetWithSubstract(p, b, ic);
+  t1 = clock();  
+  //printf("bcp_IsBCLSubsetWithSubstract(p, b, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, b, ic);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, b, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+  t0 = clock();
+  //is_subset = bcp_IsBCLSubsetWithSubstract(p, ic, b);
+  t1 = clock();  
+  //printf("bcp_IsBCLSubsetWithSubstract(p, ic, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, ic, b);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, ic, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+
+  t0 = clock();
+  //is_subset = bcp_IsBCLSubsetWithSubstract(p, a, b);
+  t1 = clock();  
+  //printf("bcp_IsBCLSubsetWithSubstract(p, a, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, a, b);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, a, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+  t0 = clock();
+  //is_subset = bcp_IsBCLSubsetWithSubstract(p, b, a);
+  t1 = clock();  
+  //printf("bcp_IsBCLSubsetWithSubstract(p, b, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, b, a);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, b, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
   
-  bcp_DeleteBCL(p,  l);
-  bcp_DeleteBCL(p,  n);
-  //bcp_DeleteBCL(p,  m);
+  bcp_DeleteBCL(p,  a);
+  bcp_DeleteBCL(p,  b);
+  bcp_DeleteBCL(p,  ic);
 
   bcp_Delete(p);  
   
