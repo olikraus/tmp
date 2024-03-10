@@ -1503,18 +1503,18 @@ void bcp_CalcBCLBinateSplitVariableTable8(bcp p, bcl l)
 			zc3 = _mm_adds(zc3, t);
 		}
 		
-		/* store the registers for counting zeros and ones */
-		_mm_storeu_si128(zero_cnt_cube[0] + i, zc0);
-		_mm_storeu_si128(zero_cnt_cube[1] + i, zc1);
-		_mm_storeu_si128(zero_cnt_cube[2] + i, zc2);
-		_mm_storeu_si128(zero_cnt_cube[3] + i, zc3);
-		
-		_mm_storeu_si128(one_cnt_cube[0] + i, oc0);
-		_mm_storeu_si128(one_cnt_cube[1] + i, oc1);
-		_mm_storeu_si128(one_cnt_cube[2] + i, oc2);
-		_mm_storeu_si128(one_cnt_cube[3] + i, oc3);
-          }
-	}
+              } // for j list
+              /* store the registers for counting zeros and ones */
+              _mm_storeu_si128(zero_cnt_cube[0] + i, zc0);
+              _mm_storeu_si128(zero_cnt_cube[1] + i, zc1);
+              _mm_storeu_si128(zero_cnt_cube[2] + i, zc2);
+              _mm_storeu_si128(zero_cnt_cube[3] + i, zc3);
+              
+              _mm_storeu_si128(one_cnt_cube[0] + i, oc0);
+              _mm_storeu_si128(one_cnt_cube[1] + i, oc1);
+              _mm_storeu_si128(one_cnt_cube[2] + i, oc2);
+              _mm_storeu_si128(one_cnt_cube[3] + i, oc3);
+	} // for i block
 	
         /* 
           based on the calculated number of "one" and "zero" values, find a variable which fits best for splitting.
@@ -1690,8 +1690,9 @@ void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 			c = _mm_srai_epi16(c,1);
 			t = _mm_andnot_si128(c, mc);
 			zc7 = _mm_adds_epi16(zc7, t);
-		}
+                  }  // flag test
 		
+                } // j, list loop
 		/* store the registers for counting zeros and ones */
 		_mm_storeu_si128(zero_cnt_cube[0] + i, zc0);
 		_mm_storeu_si128(zero_cnt_cube[1] + i, zc1);
@@ -1710,14 +1711,13 @@ void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 		_mm_storeu_si128(one_cnt_cube[5] + i, oc5);
 		_mm_storeu_si128(one_cnt_cube[6] + i, oc6);
 		_mm_storeu_si128(one_cnt_cube[7] + i, oc7);
-	}
 	
         /* 
           based on the calculated number of "one" and "zero" values, find a variable which fits best for splitting.
           According to R. Rudell in "Multiple-Valued Logic Minimization for PLA Synthesis" this should be the
           variable with the highest value of one_cnt + zero_cnt
         */
-      }
+      } // i, block loop
 }
 
 /*
@@ -1822,6 +1822,9 @@ int bcp_GetBCLMaxBinateSplitVariableSimple8(bcp p, bcl l)
   
   bc zero_cnt_cube[4];
   bc one_cnt_cube[4];
+  
+  if ( l->cnt == 0 )
+    return -1;
 
   /* "misuse" the cubes as SIMD storage area for the counters */
   zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
@@ -1950,6 +1953,9 @@ int bcp_GetBCLMaxBinateSplitVariable8(bcp p, bcl l)
   
   bc zero_cnt_cube[4];
   bc one_cnt_cube[4];
+  
+  if ( l->cnt == 0 )
+    return -1;
 
   /* "misuse" the cubes as SIMD storage area for the counters */
   zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
@@ -2062,6 +2068,9 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
   
   bc zero_cnt_cube[8];
   bc one_cnt_cube[8];
+
+  if ( l->cnt == 0 )
+    return -1;
 
   /* "misuse" the cubes as SIMD storage area for the counters */
   zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
@@ -2188,6 +2197,10 @@ int bcp_GetBCLMaxSplitVariable(bcp p, bcl l)
   bc zero_cnt_cube[8];
   bc one_cnt_cube[8];
 
+  if ( l->cnt == 0 )
+    return -1;
+  
+  
   /* "misuse" the cubes as SIMD storage area for the counters */
   zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
   zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
@@ -2410,6 +2423,11 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
 #ifdef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
   int is_unate;
 #endif
+  
+  assert(depth < 2000);
+  
+  if ( l->cnt == 0 )
+    return 0;
   
   bcp_CalcBCLBinateSplitVariableTable(p, l);
 
@@ -2870,7 +2888,7 @@ int main1(void)
 int main(void)
 {
   
-  int cnt = 18;         // crash??? because of tautology depth
+  int cnt = 18;
   clock_t t0, t1;
   bcp p = bcp_New(cnt);
   bcl l = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
