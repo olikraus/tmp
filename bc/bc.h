@@ -87,7 +87,7 @@ int bcp_GetCubeVariableCount(bcp p, bc cube);   // return the number of 01 or 10
 int bcp_GetCubeDelta(bcp p, bc a, bc b);                // calculate the delta between a and b
 int bcp_IsSubsetCube(bcp p, bc a, bc b);                // is "b" is a subset of "a"
 
-
+/* bclcore.c */
 
 bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
