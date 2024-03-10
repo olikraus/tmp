@@ -137,7 +137,7 @@ int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c);           // is cube c a subset of
 int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos);      // is the cube at pos in l covered by all other cubes in l
 void bcp_DoBCLMultiCubeContainment(bcp p, bcl l);
 void bcp_DoBCLSimpleExpand(bcp p, bcl l);
-void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);
+void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);  // this operation does not do any SCC or MCC
 void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
 void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
 
@@ -161,8 +161,9 @@ int bcp_IsBCLUnate(bcp p);  // requires call to bcp_CalcBCLBinateSplitVariableTa
 int bcp_IsBCLTautology(bcp p, bcl l);
 int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a"
 int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
-bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);
-bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l);
+bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);  // faster than with cofactor
+bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l); // slow!
+void bcp_MinimizeBCL(bcp p, bcl l);
 
 
 /*============================================================*/
@@ -2667,6 +2668,24 @@ bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l)
   return n;
 }
 
+/*
+  try to reduce the total number of element in "l" via some heuristics.
+  The reduction is done by:
+    - Widen the existing cubes
+    - Removing redundant cubes
+  The minimization does not:
+    - Create new cubes (primes) which may cover existing terms better
+*/
+void bcp_MinimizeBCL(bcp p, bcl l)
+{
+  bcp_DoBCLSingleCubeContainment(p, l);         // do an initial SCC simplification
+  bcl complement = bcp_NewBCLComplementWithSubtract(p, l);      // calculate the complement for the expand algo
+  bcp_DoBCLExpandWithOffSet(p, l, complement);          // expand all terms as far es possible
+  bcp_DoBCLSingleCubeContainment(p, l);                         // do another SCC as a preparation for the MCC
+  bcp_DoBCLMultiCubeContainment(p, l);                          // finally do multi cube minimization
+}
+
+
 
 /*============================================================*/
 
@@ -2711,6 +2730,8 @@ bcl bcp_NewBCLWithRandomTautology(bcp p, int size, int dc2one_conversion_cnt)
   
   return l;
 }
+
+
 
 /*============================================================*/
 
@@ -2935,7 +2956,7 @@ int main1(void)
 int main(void)
 {
   
-  int cnt = 71;
+  int cnt = 43;
   int is_subset = 0;
   clock_t t0, t1;
   bcp p = bcp_New(cnt);
@@ -2946,6 +2967,9 @@ int main(void)
   
   bcp_IntersectionBCLs(p, ic, a, b);
   assert( ic->list != 0 );
+  printf("raw  ic->cnt = %d\n", ic->cnt);
+  bcp_MinimizeBCL(p, ic);
+  printf("mini ic->cnt = %d\n", ic->cnt);
   
   //puts("original:");
   //bcp_ShowBCL(p, l);
