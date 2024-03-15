@@ -92,7 +92,9 @@ int bcp_IsSubsetCube(bcp p, bc a, bc b);                // is "b" is a subset of
 bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
 int bcp_CopyBCL(bcp p, bcl a, bcl b);
+void bcp_ClearBCL(bcp p, bcl l);
 void bcp_DeleteBCL(bcp p, bcl l);
+int bcp_ExtendBCL(bcp p, bcl l);
 //bc bcp_GetBCLCube(bcp p, bcl l, int pos);
 #define bcp_GetBCLCube(p, l, pos) \
   (bc)(((uint8_t *)((l)->list)) + (pos) * (p)->bytes_per_cube_cnt)
