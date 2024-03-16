@@ -187,5 +187,11 @@ static __m128i m128i_get_n_bit_mask(uint16_t val, unsigned bit_pos)
  _mm_or_si128( m128i_get_n_bit_mask((val), (bit_pos)), _mm_andnot_si128(m128i_get_n_bit_mask(3, (bit_pos)), (m)) )
 */
 
+/* bcselftest.c */
+
+void internalTest(int var_cnt);
+
+
+
 #endif
 
