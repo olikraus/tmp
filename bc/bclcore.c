@@ -169,3 +169,77 @@ void bcp_PurgeBCL(bcp p, bcl l)
   l->cnt = j;  
   memset(l->flags, 0, l->cnt);
 }
+
+
+/* add a DC cube to the cube list and return the position of the new cube */
+int bcp_AddBCLCube(bcp p, bcl l)
+{
+  //printf("bcp_AddBCLCube cnt = %d\n", l->cnt);
+  /* ignore last_deleted for now */
+  while ( l->max <= l->cnt )
+    if ( bcp_ExtendBCL(p, l) == 0 )
+      return -1;
+  l->cnt++;
+  bcp_ClrCube(p, bcp_GetBCLCube(p, l, l->cnt-1));
+  l->flags[l->cnt-1] = 0;
+  return l->cnt-1;
+}
+
+/* add a cube and return its position */
+int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c)
+{
+  while ( l->max <= l->cnt )
+    if ( bcp_ExtendBCL(p, l) == 0 )
+      return -1;
+  l->cnt++;
+  bcp_CopyCube(p, bcp_GetBCLCube(p, l, l->cnt-1), c);  
+  l->flags[l->cnt-1] = 0;
+  return l->cnt-1;
+}
+
+/*
+  Adds the cubes from b to list a.
+  Technically this is the union of a and b, which i stored in a
+  This procedure does not do any simplification
+
+  Note: 
+    Maybe we need a bcp_UnionBCL() which also does in place SCC 
+*/
+int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b)
+{
+  int i;
+  for ( i = 0; i < b->cnt; i++ )
+  {
+    if ( b->flags[i] == 0 )
+      if ( bcp_AddBCLCubeByCube(p, a, bcp_GetBCLCube(p, b, i)) < 0 )
+        return 0;
+  }
+  return 1;
+}
+
+/*
+  add cubes from the given string.
+  multiple strings are added if separated by newline 
+*/
+int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s)
+{
+  int cube_pos;
+  for(;;)
+  {
+    for(;;)
+    {
+      if ( *s == '\0' )
+        return 1;
+      if ( *s > ' ' )
+        break;
+      s++;
+    }
+    cube_pos = bcp_AddBCLCube(p, l);
+    if ( cube_pos < 0 )
+      break;
+    bcp_SetCubeByStringPointer(p, bcp_GetBCLCube(p, l, cube_pos),  &s);
+  }
+  return 0;     // memory error
+}
+
+

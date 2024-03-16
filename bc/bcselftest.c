@@ -3,6 +3,55 @@
 #include <assert.h>
 #include <stdio.h>
 
+
+
+bcl bcp_NewBCLWithRandomTautology(bcp p, int size, int dc2one_conversion_cnt)
+{
+  bcl l = bcp_NewBCL(p);
+  int cube_pos = bcp_AddBCLCubeByCube(p, l, bcp_GetGlobalCube(p, 3));
+  int var_pos = 0; 
+  unsigned value;
+  int i;
+
+  for(;;)
+  {
+    cube_pos = rand() % l->cnt;
+    var_pos = rand() % p->var_cnt;  
+    value = bcp_GetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos);
+    if ( value == 3 )
+    {
+      bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, 1);
+      cube_pos = bcp_AddBCLCubeByCube(p, l, bcp_GetBCLCube(p, l, cube_pos));
+      bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, 2);
+    }
+    if ( l->cnt >= size )
+      break;
+  }
+
+  for( i = 0; i < dc2one_conversion_cnt; i++ )
+  {
+    for(;;)
+    {
+      cube_pos = rand() % l->cnt;
+      var_pos = rand() % p->var_cnt;  
+      value = bcp_GetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos);
+      if ( value == 3 )
+      {
+        bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, 2);
+        break;
+      }
+    }
+  }
+  
+  return l;
+}
+
+
+
+/*============================================================*/
+
+
+
 void internalTest(int var_cnt)
 {
   bcp p = bcp_New(var_cnt);

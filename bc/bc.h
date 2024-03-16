@@ -100,6 +100,16 @@ int bcp_ExtendBCL(bcp p, bcl l);
   (bc)(((uint8_t *)((l)->list)) + (pos) * (p)->bytes_per_cube_cnt)
 void bcp_ShowBCL(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
+int bcp_AddBCLCube(bcp p, bcl l); // add empty cube to list l, returns the position of the new cube or -1 in case of error
+int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c); // append cube c to list l, returns the position of the new cube or -1 in case of error
+int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b); // append cubes from b to a, does not do any simplification, returns 0 on error
+int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s); // add cube(s) described as a string, returns 0 in case of error
+#define bcp_GetBCLCnt(p, l) ((l)->cnt)
+
+
+
+
+
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
 int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c);           // is cube c a subset of l (is cube c covered by l)
 int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos);      // is the cube at pos in l covered by all other cubes in l
@@ -116,11 +126,6 @@ int bcp_IntersectionBCL(bcp p, bcl a, bcl b);   // a = a intersection with b
 bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value);         // create a new list, which is the cofactor from "l"
 bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);          // don't use this fn, use bcp_IsBCLCubeRedundant() or bcp_IsBCLCubeCovered() instead
 
-int bcp_AddBCLCube(bcp p, bcl l);
-int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c);
-int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b);
-int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s);
-#define bcp_GetBCLCnt(p, l) ((l)->cnt)
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l);
 int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l);
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
@@ -189,6 +194,7 @@ static __m128i m128i_get_n_bit_mask(uint16_t val, unsigned bit_pos)
 
 /* bcselftest.c */
 
+bcl bcp_NewBCLWithRandomTautology(bcp p, int size, int dc2one_conversion_cnt);
 void internalTest(int var_cnt);
 
 
