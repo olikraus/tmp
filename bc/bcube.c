@@ -186,6 +186,8 @@ int bcp_IsIllegal(bcp p, bc c)
 
 /*
   return the number of 01 or 10 values in a legal cube.
+
+  called by bcp_GetBCLVarCntList()
 */
 int bcp_GetCubeVariableCount(bcp p, bc cube)
 {
@@ -195,6 +197,8 @@ int bcp_GetCubeVariableCount(bcp p, bc cube)
   for( i = 0; i < cnt; i++ )
   {
     c = _mm_loadu_si128(cube+i);      // load one block from cube
+    
+    /* use gcc builtin command, also use -march=silvermont with gcc to generate the popcount assembler command */
     delta += __builtin_popcountll(~_mm_cvtsi128_si64(_mm_unpackhi_epi64(c, c)));
     delta += __builtin_popcountll(~_mm_cvtsi128_si64(c));
   }  

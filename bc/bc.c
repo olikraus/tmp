@@ -117,31 +117,6 @@ void print128_num(__m128i var)
 /*============================================================*/
 
 
-/*
-  return a list with the variable count for each cube in the list.
-  returns an allocated array, which must be free'd by the calling function
-*/
-int *bcp_GetBCLVarCntList(bcp p, bcl l)
-{
-  int i;
-  int *vcl = (int *)malloc(sizeof(int)*l->cnt);  
-  assert(l != NULL);
-  if ( vcl == NULL )
-    return NULL;
-  for( i = 0; i < l->cnt; i++ )
-  {
-    if ( l->flags[i] == 0 )
-    {
-      vcl[i] = bcp_GetCubeVariableCount(p, bcp_GetBCLCube(p,l,i));
-    }
-    else
-    {
-      vcl[i] = -1;
-    }
-  }
-  return vcl;
-}
-
 
 /*
   In the given BCL, ensure, that no cube is part of any other cube
@@ -154,6 +129,12 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   bc c;
   int vc;
   
+  /*
+    calculate the number of 01 and 10 codes for each of the cubes in "l"
+    idea is to reduce the number of "subset" tests, because for a cube with n variables,
+    can be a subset of another cube only if this other cube has lesser variables.
+    however: also the requal case is checked, to check wether two cubes are identical
+  */
   int *vcl = bcp_GetBCLVarCntList(p, l);
 
   
@@ -655,159 +636,6 @@ int bcp_GetBCLMaxSplitVariable(bcp p, bcl l)
 }
 
 
-/*
-  Precondition: call to 
-    void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)  
-
-  return 0 if there is any variable which has one's and "zero's in the table
-  otherwise this function returns 1
-*/
-int bcp_IsBCLUnate8(bcp p)
-{
-  int b;
-  bc zero_cnt_cube[4];
-  bc one_cnt_cube[4];
-  __m128i z;
-  __m128i o;
-
-  /* "misuse" the cubes as SIMD storage area for the counters */
-  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
-  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
-  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
-  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
-  
-  one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
-  one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
-  one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
-  one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
-
-  for( b = 0; b < p->blk_cnt; b++ )
-  {
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-        
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-  }
-  return 1;
-}
-
-
-/* 16 bit version */
-int bcp_IsBCLUnate(bcp p)
-{
-  int b;
-  bc zero_cnt_cube[8];
-  bc one_cnt_cube[8];
-  __m128i z;
-  __m128i o;
-
-  /* "misuse" the cubes as SIMD storage area for the counters */
-  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
-  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
-  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
-  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
-  zero_cnt_cube[4] = bcp_GetGlobalCube(p, 8);
-  zero_cnt_cube[5] = bcp_GetGlobalCube(p, 9);
-  zero_cnt_cube[6] = bcp_GetGlobalCube(p, 10);
-  zero_cnt_cube[7] = bcp_GetGlobalCube(p, 11);
-  
-  one_cnt_cube[0] = bcp_GetGlobalCube(p, 12);
-  one_cnt_cube[1] = bcp_GetGlobalCube(p, 13);
-  one_cnt_cube[2] = bcp_GetGlobalCube(p, 14);
-  one_cnt_cube[3] = bcp_GetGlobalCube(p, 15);
-  one_cnt_cube[4] = bcp_GetGlobalCube(p, 16);
-  one_cnt_cube[5] = bcp_GetGlobalCube(p, 17);
-  one_cnt_cube[6] = bcp_GetGlobalCube(p, 18);
-  one_cnt_cube[7] = bcp_GetGlobalCube(p, 19);
-
-  for( b = 0; b < p->blk_cnt; b++ )
-  {
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-        
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-        
-        
-        
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[4]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[4]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[5]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[5]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[6]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[6]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-
-        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[7]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[7]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
-                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
-                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
-        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
-          return 0;
-        
-        
-  }
-  return 1;
-}
 
 
 // the unate check is faster than the split var calculation, but if the BCL is binate, then both calculations have to be done

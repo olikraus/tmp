@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 bcl bcp_NewBCL(bcp p)
 {
@@ -242,4 +243,42 @@ int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s)
   return 0;     // memory error
 }
 
+
+/*
+  return a list with the variable count for each cube in the list.
+  this information can be used to optimize sub-set related checks
+
+  returns an allocated array, which must be free'd by the calling function
+
+  used by 
+    void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
+  to reduce the total number of checks
+
+  used by
+    void bcp_DoBCLMultiCubeContainment(bcp p, bcl l)
+  to guide the check
+  
+  calls: bcp_GetCubeVariableCount
+
+*/
+int *bcp_GetBCLVarCntList(bcp p, bcl l)
+{
+  int i;
+  int *vcl = (int *)malloc(sizeof(int)*l->cnt);  
+  assert(l != NULL);
+  if ( vcl == NULL )
+    return NULL;
+  for( i = 0; i < l->cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      vcl[i] = bcp_GetCubeVariableCount(p, bcp_GetBCLCube(p,l,i));
+    }
+    else
+    {
+      vcl[i] = -1;
+    }
+  }
+  return vcl;
+}
 

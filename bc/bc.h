@@ -89,6 +89,8 @@ int bcp_IsSubsetCube(bcp p, bc a, bc b);                // is "b" is a subset of
 
 /* bclcore.c */
 
+#define bcp_GetBCLCnt(p, l) ((l)->cnt)
+
 bcl bcp_NewBCL(bcp p);          // create new empty bcl
 bcl bcp_NewBCLByBCL(bcp p, bcl l);      // create a new bcl as a copy of an existing bcl
 int bcp_CopyBCL(bcp p, bcl a, bcl b);
@@ -104,7 +106,7 @@ int bcp_AddBCLCube(bcp p, bcl l); // add empty cube to list l, returns the posit
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c); // append cube c to list l, returns the position of the new cube or -1 in case of error
 int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b); // append cubes from b to a, does not do any simplification, returns 0 on error
 int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s); // add cube(s) described as a string, returns 0 in case of error
-#define bcp_GetBCLCnt(p, l) ((l)->cnt)
+int *bcp_GetBCLVarCntList(bcp p, bcl l);
 
 /* bccofactor.c */
 
@@ -115,6 +117,7 @@ void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value
 bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value);       // create a new list, which is the cofactor from "l"
 void bcp_DoBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);         
 bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);          // don't use this fn, use bcp_IsBCLCubeRedundant() or bcp_IsBCLCubeCovered() instead
+int bcp_IsBCLUnate(bcp p);
 
 
 
@@ -133,7 +136,6 @@ int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b); // result = a interse
 int bcp_IntersectionBCL(bcp p, bcl a, bcl b);   // a = a intersection with b 
 
 
-int bcp_GetBCLBalancedBinateSplitVariable(bcp p, bcl l);
 int bcp_IsBCLUnate(bcp p);  // requires call to bcp_CalcBCLBinateSplitVariableTable
 
 int bcp_IsBCLTautology(bcp p, bcl l);

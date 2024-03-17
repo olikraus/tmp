@@ -427,6 +427,66 @@ int bcp_GetBCLMaxBinateSplitVariable8(bcp p, bcl l)
 }
 
 
+/*
+  Precondition: call to 
+    void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)  
+
+  return 0 if there is any variable which has one's and "zero's in the table
+  otherwise this function returns 1
+*/
+int bcp_IsBCLUnate8(bcp p)
+{
+  int b;
+  bc zero_cnt_cube[4];
+  bc one_cnt_cube[4];
+  __m128i z;
+  __m128i o;
+
+  /* "misuse" the cubes as SIMD storage area for the counters */
+  zero_cnt_cube[0] = bcp_GetGlobalCube(p, 4);
+  zero_cnt_cube[1] = bcp_GetGlobalCube(p, 5);
+  zero_cnt_cube[2] = bcp_GetGlobalCube(p, 6);
+  zero_cnt_cube[3] = bcp_GetGlobalCube(p, 7);
+  
+  one_cnt_cube[0] = bcp_GetGlobalCube(p, 8);
+  one_cnt_cube[1] = bcp_GetGlobalCube(p, 9);
+  one_cnt_cube[2] = bcp_GetGlobalCube(p, 10);
+  one_cnt_cube[3] = bcp_GetGlobalCube(p, 11);
+
+  for( b = 0; b < p->blk_cnt; b++ )
+  {
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[0]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+        
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[1]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[2]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+
+        z = _mm_cmpeq_epi8(_mm_loadu_si128(zero_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+        o = _mm_cmpeq_epi8(_mm_loadu_si128(one_cnt_cube[3]+b), _mm_setzero_si128());     // 0 cnt becomes 0xff and all other values become 0x00
+                       // if ones and zeros are present, then both values are 0x00 and the reseult of the or is also 0x00
+                      // this means, if there is any bit in c set to 0, then BCL is not unate and we can finish this procedure
+        if ( _mm_movemask_epi8(_mm_or_si128(o, z)) != 0x0ffff )
+          return 0;
+  }
+  return 1;
+}
+
+
 /*============================================================*/
 /* functions, which are in general obsolete, but might be reused at some point in time */
 
