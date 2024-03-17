@@ -120,9 +120,12 @@ bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);          // don't
 int bcp_IsBCLUnate(bcp p);
 
 
-
+/* bclcontainment.c */
 
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
+
+
+
 int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c);           // is cube c a subset of l (is cube c covered by l)
 int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos);      // is the cube at pos in l covered by all other cubes in l
 void bcp_DoBCLMultiCubeContainment(bcp p, bcl l);
