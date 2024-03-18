@@ -117,35 +117,52 @@ void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value
 bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value);       // create a new list, which is the cofactor from "l"
 void bcp_DoBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);         
 bcl bcp_NewBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);          // don't use this fn, use bcp_IsBCLCubeRedundant() or bcp_IsBCLCubeCovered() instead
-int bcp_IsBCLUnate(bcp p);
+int bcp_IsBCLUnate(bcp p);  // requires call to bcp_CalcBCLBinateSplitVariableTable
 
 
 /* bclcontainment.c */
 
 void bcp_DoBCLSingleCubeContainment(bcp p, bcl l);
-
-
-
 int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c);           // is cube c a subset of l (is cube c covered by l)
 int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos);      // is the cube at pos in l covered by all other cubes in l
 void bcp_DoBCLMultiCubeContainment(bcp p, bcl l);
+
+
+/* bcltautology.c */
+
+int bcp_IsBCLTautology(bcp p, bcl l);
+
+
+/* bclsubstract.c */
+
+// oid bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
+void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);
+
+/* bclcomplement.c */
+
+bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);  // faster than with cofactor
+bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l); // slow!
+bcl bcp_NewBCLComplement(bcp p, bcl l);         // calls bcp_NewBCLComplementWithSubtract();
+
+
+/* bclsubset.c */
+
+int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a"
+int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
+int bcp_IsBCLSubset(bcp p, bcl a, bcl b);       //   test, whether "b" is a subset of "a", calls bcp_IsBCLSubsetWithCofactor()
+
+
+
+
 void bcp_DoBCLSimpleExpand(bcp p, bcl l);
 void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);  // this operation does not do any SCC or MCC
 void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
-void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
 
-void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);
 int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b); // result = a intersection with b
 int bcp_IntersectionBCL(bcp p, bcl a, bcl b);   // a = a intersection with b 
 
 
-int bcp_IsBCLUnate(bcp p);  // requires call to bcp_CalcBCLBinateSplitVariableTable
 
-int bcp_IsBCLTautology(bcp p, bcl l);
-int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a"
-int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
-bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l);  // faster than with cofactor
-bcl bcp_NewBCLComplementWithCofactor(bcp p, bcl l); // slow!
 void bcp_MinimizeBCL(bcp p, bcl l);
 
 /*

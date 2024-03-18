@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+/*============================================================*/
+/* simple single covered procedure */
 
 /*
   In the given BCL, ensure, that no cube is part of any other cube
@@ -67,3 +69,78 @@ void bcp_DoBCLSingleCubeContainment(bcp p, bcl l)
   bcp_PurgeBCL(p, l);
   free(vcl);
 }
+
+/*============================================================*/
+/* complex cover, based on the idea, that the a cube is covered by a list, */
+/* if the cofactor of the list against that cube has the tautology property */
+
+/*
+  checks, whether the given cube "c" is a subset (covered) of the list "l"
+  cube "c" must not be physical part of the list. if this is the case use bcp_IsBCLCubeRedundant() instead
+  
+*/
+int bcp_IsBCLCubeCovered(bcp p, bcl l, bc c)
+{
+  bcl n = bcp_NewBCLCofactorByCube(p, l, c, -1);
+  int result = bcp_IsBCLTautology(p, n);
+  bcp_DeleteBCL(p, n);
+  return result;
+}
+
+/*
+  checks, whether the cube at position "pos" is a subset of all other cubes in the same list.
+*/
+int bcp_IsBCLCubeRedundant(bcp p, bcl l, int pos)
+{
+  bcl n = bcp_NewBCLCofactorByCube(p, l, bcp_GetBCLCube(p, l, pos), pos);
+  int result = bcp_IsBCLTautology(p, n);
+  bcp_DeleteBCL(p, n);
+  return result;
+}
+
+/*
+
+  IRREDUNDANT 
+
+  Remove cubes from "l", whch are covered by the rest of the list "l".
+
+  This procedure will remove the smallest cubes first
+
+*/
+void bcp_DoBCLMultiCubeContainment(bcp p, bcl l)
+{
+  int i;
+  int *vcl = bcp_GetBCLVarCntList(p, l);
+  int min = p->var_cnt;
+  int max = 0;
+  int vc;
+
+  for( i = 0; i < l->cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      if ( min > vcl[i] )
+        min = vcl[i];
+      if ( max < vcl[i] )
+        max = vcl[i];
+    }
+  }
+
+  for( vc = max; vc >= min; vc-- )      // it seems to be faster to start checking the smallest cubes first
+  {
+    for( i = 0; i < l->cnt; i++ )
+    {
+      if ( l->flags[i] == 0 && vcl[i] == vc )
+      {
+        if ( bcp_IsBCLCubeRedundant(p, l, i) )
+        {
+          l->flags[i] = 1;
+        }
+        
+      } // i cube not deleted
+    } // i loop
+  } // vc loop
+  free(vcl);
+  bcp_PurgeBCL(p, l);
+}
+
