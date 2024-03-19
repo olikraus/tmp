@@ -32,12 +32,12 @@ bcl bcp_NewBCLComplementWithSubtract(bcp p, bcl l)
     bcp_CalcBCLBinateSplitVariableTable(p, l);
     if ( bcp_IsBCLUnate(p) )
       is_mcc = 0;
-    if ( bcp_AddBCLCubeByCube(p, result, bcp_GetGlobalCube(p, 3)) < 0)  // "result" contains the universal cube
+    if ( bcp_AddBCLCubeByCube(p, result, bcp_GetGlobalCube(p, 3)) < 0)  // 3: universal cube
       return bcp_DeleteBCL(p, result), NULL;
     bcp_SubtractBCL(p, result, l, is_mcc);             // "result" contains the negation of "l"
     
     // do a small minimization step
-    bcp_DoBCLExpandWithOffSet(p, result, l);
+    bcp_DoBCLExpandWithOffSet(p, result, l);   // not sure whether this will help, cubes might be already max due to the sharp operation
     bcp_DoBCLMultiCubeContainment(p, result);
 
     return result;

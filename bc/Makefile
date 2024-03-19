@@ -3,7 +3,7 @@
 CFLAGS = -g -pg -Wall
 
 SRC = bcutil.c bcp.c bcube.c bclcore.c bcselftest.c bccofactor.c 
-SRC += bclcontainment.c bcltautology.c bclsubstract.c 
+SRC += bclcontainment.c bcltautology.c bclsubtract.c 
 SRC += bclcomplement.c bclsubset.c bclintersection.c
 SRC += bclexpand.c bclminimize.c
 SRC += main.c
