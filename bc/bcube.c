@@ -11,6 +11,10 @@
 #include <assert.h>
 
 
+#define m128i_is_equal(m1, m2) \
+  ((_mm_movemask_epi8(_mm_cmpeq_epi16((m1),(m2))) == 0xFFFF)?1:0)
+
+
 void bcp_ClrCube(bcp p, bc c)
 {
   memset(c, 0xff, p->bytes_per_cube_cnt);       // assign don't care

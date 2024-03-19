@@ -4,7 +4,7 @@
   
   boolean cube list: check whether a bcl list is part or equal to another bcl list
 
-  There are two ways to calculate to derive this property
+  There are two ways to calculate whether a set is subset of another set
     1) Via substract from each other
     2) Via check whether each cube of a bcl list is covered by the other list (cofactor version)
     
@@ -12,8 +12,8 @@
   seems to be faster.
   
   This code defines also 
-    bcl bcp_NewBCLComplement(bcp p, bcl l)
-  which just calles "bcp_NewBCLComplementWithSubtract"
+    int bcp_IsBCLSubset(bcp p, bcl a, bcl b)
+  which just calles "bcp_IsBCLSubsetWithCofactor"
   
 */
 #include "bc.h"
@@ -33,7 +33,7 @@ int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b)
   int i;
   for( i = 0; i < b->cnt; i++ )
   {
-    if ( bcp_IsBCLCubeCovered(p, a, bcp_GetBCLCube(p, b, i)) == 0 )
+    if ( bcp_IsBCLCubeCovered(p, a, bcp_GetBCLCube(p, b, i)) == 0 )     // bclcontainment.c
       return 0;
   }
   return 1;
@@ -52,7 +52,7 @@ int bcp_IsBCLSubset(bcp p, bcl a, bcl b)
 
   SLOWER
 */
-int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b)
+int bcp_IsBCLSubsetWithSubtract(bcp p, bcl a, bcl b)
 {
   int result = 0;
   bcl tmp = bcp_NewBCLByBCL(p, b);  

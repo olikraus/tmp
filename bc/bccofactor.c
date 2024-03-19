@@ -418,6 +418,33 @@ int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l)
 
 
 
+/*
+  with the cube at postion "pos" within "l", check whether there are any other cubes, which are a subset of the cobe at postion "pos"
+  The cubes, which are marked as subset are not deleted. This should done by a later call to bcp_BCLPurge()
+*/
+static void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos)
+{
+  int j;
+  int cnt = l->cnt;
+  bc c = bcp_GetBCLCube(p, l, pos);
+  for( j = 0; j < cnt; j++ )
+  {
+    if ( j != pos && l->flags[j] == 0  )
+    {
+      /*
+        test, whether "b" is a subset of "a"
+        returns:      
+          1: yes, "b" is a subset of "a"
+          0: no, "b" is not a subset of "a"
+      */
+      if ( bcp_IsSubsetCube(p, c, bcp_GetBCLCube(p, l, j)) != 0 )
+      {
+        l->flags[j] = 1;      // mark the j cube as covered (to be deleted)
+      }            
+    }
+  }  
+}
+
 
 
 

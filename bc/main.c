@@ -113,99 +113,14 @@ int main1(void)
   return 0;
 }
 
-#include <time.h>
-
 int main(void)
 {
   
-  int cnt = 43;
-  int is_subset = 0;
-  clock_t t0, t1;
-  bcp p = bcp_New(cnt);
-  bcl a = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
-  bcl b = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
-  bcl ic = bcp_NewBCL(p);
   
-  
-  bcp_IntersectionBCLs(p, ic, a, b);
-  assert( ic->list != 0 );
-  printf("raw  ic->cnt = %d\n", ic->cnt);
-  bcp_MinimizeBCL(p, ic);
-  printf("mini ic->cnt = %d\n", ic->cnt);
-  
-  //puts("original:");
-  //bcp_ShowBCL(p, l);
-
-  t0 = clock();
-  //is_subset = bcp_IsBCLSubsetWithSubstract(p, a, ic);
-  t1 = clock();  
-  //printf("bcp_IsBCLSubsetWithSubstract(p, a, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  is_subset = bcp_IsBCLSubsetWithCofactor(p, a, ic);
-  t1 = clock();  
-  printf("bcp_IsBCLSubsetWithCofactor(p, a, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  //is_subset = bcp_IsBCLSubsetWithSubstract(p, ic, a);
-  t1 = clock();  
-  //printf("bcp_IsBCLSubsetWithSubstract(p, ic, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  is_subset = bcp_IsBCLSubsetWithCofactor(p, ic, a);
-  t1 = clock();  
-  printf("bcp_IsBCLSubsetWithCofactor(p, ic, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-
-  t0 = clock();
-  //is_subset = bcp_IsBCLSubsetWithSubstract(p, b, ic);
-  t1 = clock();  
-  //printf("bcp_IsBCLSubsetWithSubstract(p, b, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  is_subset = bcp_IsBCLSubsetWithCofactor(p, b, ic);
-  t1 = clock();  
-  printf("bcp_IsBCLSubsetWithCofactor(p, b, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  //is_subset = bcp_IsBCLSubsetWithSubstract(p, ic, b);
-  t1 = clock();  
-  //printf("bcp_IsBCLSubsetWithSubstract(p, ic, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  is_subset = bcp_IsBCLSubsetWithCofactor(p, ic, b);
-  t1 = clock();  
-  printf("bcp_IsBCLSubsetWithCofactor(p, ic, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-
-  t0 = clock();
-  //is_subset = bcp_IsBCLSubsetWithSubstract(p, a, b);
-  t1 = clock();  
-  //printf("bcp_IsBCLSubsetWithSubstract(p, a, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  is_subset = bcp_IsBCLSubsetWithCofactor(p, a, b);
-  t1 = clock();  
-  printf("bcp_IsBCLSubsetWithCofactor(p, a, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  //is_subset = bcp_IsBCLSubsetWithSubstract(p, b, a);
-  t1 = clock();  
-  //printf("bcp_IsBCLSubsetWithSubstract(p, b, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-
-  t0 = clock();
-  is_subset = bcp_IsBCLSubsetWithCofactor(p, b, a);
-  t1 = clock();  
-  printf("bcp_IsBCLSubsetWithCofactor(p, b, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
-  
-  bcp_DeleteBCL(p,  a);
-  bcp_DeleteBCL(p,  b);
-  bcp_DeleteBCL(p,  ic);
-
-  bcp_Delete(p);  
-  
-  internalTest(19);
-  
+  //internalTest(19);
+  //speedTest(21);
+ 
+  minimizeTest(21);
   return 0;
 }
 

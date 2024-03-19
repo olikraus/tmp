@@ -1,6 +1,6 @@
 /*
 
-  bclsubstract.c
+  bclsubtract.c
   
   boolean cube list: substract / difference calculation
   

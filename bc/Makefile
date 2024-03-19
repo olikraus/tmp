@@ -2,9 +2,10 @@
 # CFLAGS = -O4 -march=silvermont -Wall
 CFLAGS = -g -pg -Wall
 
-SRC = bc.c bcp.c bcube.c bclcore.c bcselftest.c bccofactor.c 
+SRC = bcutil.c bcp.c bcube.c bclcore.c bcselftest.c bccofactor.c 
 SRC += bclcontainment.c bcltautology.c bclsubstract.c 
-SRC += bclcomplement.c bclsubset.c
+SRC += bclcomplement.c bclsubset.c bclintersection.c
+SRC += bclexpand.c bclminimize.c
 SRC += main.c
 
 OBJ = $(SRC:.c=.o)

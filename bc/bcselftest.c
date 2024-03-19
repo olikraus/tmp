@@ -1,7 +1,16 @@
+/*
+
+  bcselftest.c
+  
+  self and performance tests
+
+*/
 
 #include "bc.h"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
+
 
 
 
@@ -155,3 +164,192 @@ void internalTest(int var_cnt)
 
 }
 
+void speedTest(int cnt) 
+{
+  int is_subset = 0;
+  clock_t t0, t1;
+  clock_t t_cofactor = 0;
+  clock_t t_subtract = 0;
+  bcp p = bcp_New(cnt);
+  bcl a = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
+  bcl b = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
+  bcl x;
+  bcl ic = bcp_NewBCL(p);
+  
+  
+  bcp_IntersectionBCLs(p, ic, a, b);
+  assert( ic->list != 0 );
+  printf("raw  ic->cnt = %d\n", ic->cnt);
+  bcp_MinimizeBCL(p, ic);
+  printf("mini ic->cnt = %d\n", ic->cnt);
+  
+  //puts("original:");
+  //bcp_ShowBCL(p, l);
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithSubtract(p, a, ic);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithSubtract(p, a, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, a, ic);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, a, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_cofactor += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithSubtract(p, ic, a);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithSubtract(p, ic, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, ic, a);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, ic, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_cofactor += t1-t0;
+
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithSubtract(p, b, ic);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithSubtract(p, b, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, b, ic);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, b, ic): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_cofactor += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithSubtract(p, ic, b);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithSubtract(p, ic, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, ic, b);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, ic, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_cofactor += t1-t0;
+
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithSubtract(p, a, b);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithSubtract(p, a, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, a, b);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, a, b): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_cofactor += t1-t0;
+
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithSubtract(p, b, a);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithSubtract(p, b, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_subtract += t1-t0;
+  
+  t0 = clock();
+  is_subset = bcp_IsBCLSubsetWithCofactor(p, b, a);
+  t1 = clock();  
+  printf("bcp_IsBCLSubsetWithCofactor(p, b, a): is_subset=%d clock=%ld\n", is_subset, t1-t0);  
+  t_cofactor += t1-t0;
+  
+  printf("subset with substract total %ld\n", t_subtract);
+  printf("subset with cofactor total %ld\n", t_cofactor);
+  
+  if ( t_subtract < t_cofactor )
+    printf("bcp_IsBCLSubsetWithSubtract is faster\n");
+  else
+    printf("bcp_IsBCLSubsetWithCofactor is faster\n");
+
+  t_subtract = 0;
+  t_cofactor = 0;
+
+  t0 = clock();
+  x = bcp_NewBCLComplementWithSubtract(p, a);
+  t1 = clock();  
+  bcp_DeleteBCL(p, x);
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  x = bcp_NewBCLComplementWithCofactor(p, a);
+  t1 = clock();  
+  bcp_DeleteBCL(p, x);
+  t_cofactor += t1-t0;
+  
+  t0 = clock();
+  x = bcp_NewBCLComplementWithSubtract(p, b);
+  t1 = clock();  
+  bcp_DeleteBCL(p, x);
+  t_subtract += t1-t0;
+
+  t0 = clock();
+  x = bcp_NewBCLComplementWithCofactor(p, b);
+  t1 = clock();  
+  bcp_DeleteBCL(p, x);
+  t_cofactor += t1-t0;
+
+  printf("complement with substract total %ld\n", t_subtract);
+  printf("complement with cofactor total %ld\n", t_cofactor);
+  
+  if ( t_subtract < t_cofactor )
+    printf("bcp_NewBCLComplementWithSubtract is faster\n");
+  else
+    printf("bcp_NewBCLComplementWithCofactor is faster\n");
+
+  
+  bcp_DeleteBCL(p,  a);
+  bcp_DeleteBCL(p,  b);
+  bcp_DeleteBCL(p,  ic);
+
+  bcp_Delete(p);  
+  
+}
+
+
+
+void minimizeTest(int cnt) 
+{
+  clock_t t0, t1;
+  bcp p = bcp_New(cnt);
+  bcl a = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
+  bcl b = bcp_NewBCLWithRandomTautology(p, cnt+2, cnt);
+  bcl ic = bcp_NewBCL(p);
+  
+  
+  bcp_IntersectionBCLs(p, ic, a, b);
+  assert( ic->list != 0 );
+  
+  
+  printf("raw ic->cnt = %d\n", ic->cnt);
+  t0 = clock();
+  bcp_MinimizeBCL(p, ic);
+  t1 = clock();  
+  printf("mini ic->cnt = %d, clock = %ld\n", ic->cnt, t1-t0);
+  
+  printf("raw a->cnt = %d\n", a->cnt);
+  t0 = clock();
+  bcp_MinimizeBCL(p, a);
+  t1 = clock();  
+  printf("mini a->cnt = %d, clock = %ld\n", a->cnt, t1-t0);
+
+  printf("raw b->cnt = %d\n", b->cnt);
+  t0 = clock();
+  bcp_MinimizeBCL(p, b);
+  t1 = clock();  
+  printf("mini b->cnt = %d, clock = %ld\n", b->cnt, t1-t0);
+
+
+  bcp_DeleteBCL(p,  a);
+  bcp_DeleteBCL(p,  b);
+  bcp_DeleteBCL(p,  ic);
+
+  bcp_Delete(p);  
+  
+}

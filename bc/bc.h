@@ -4,6 +4,30 @@
   
   boolean cube
 
+  Suggested article: R. Rudell "Multiple-Valued Logic Minimization for PLA Synthesis"
+    https://www2.eecs.berkeley.edu/Pubs/TechRpts/1986/734.html
+  This code will only use the binary case (and not the multiple value case) which is partly described in the above article.  
+
+  https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#ssetechs=SSE,SSE2&ig_expand=80
+
+  gcc -g -Wall -fsanitize=address bc.c
+  
+  predecessor output
+  echo | gcc -dM -E -  
+  echo | gcc -march=native -dM -E -
+  echo | gcc -march=silvermont -dM -E -         // Pentium N3710: sse4.2 popcnt 
+ 
+
+  
+  === definitions ===
+  
+  - Variable: A boolean variable which is one (1), zero (0), don't care (-) or illegal (x)
+  - Variable encoding: A variable is encoded with two bits: one=10, zero=01, don't care=11, illegal=00
+  - Blk (block): A physical unit in the uC which can group multiple variables, e.g. __m128i or uint64_t
+  - Cube: A vector of multiple blocks, which can hold all variables of a boolean cube problem. Usually this is interpreted as a "product" ("and" operation) of the boolean variables
+  - Boolean cube problem: A master structure with a given number of boolean variables ("var_cnt")  
+
+
 */
 
 #ifndef BC_H
@@ -147,82 +171,33 @@ bcl bcp_NewBCLComplement(bcp p, bcl l);         // calls bcp_NewBCLComplementWit
 
 /* bclsubset.c */
 
-int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a"
-int bcp_IsBCLSubsetWithSubstract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
+int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a", returns 1 if this is the case
+int bcp_IsBCLSubsetWithSubtract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
 int bcp_IsBCLSubset(bcp p, bcl a, bcl b);       //   test, whether "b" is a subset of "a", calls bcp_IsBCLSubsetWithCofactor()
 
 
-
-
-void bcp_DoBCLSimpleExpand(bcp p, bcl l);
-void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);  // this operation does not do any SCC or MCC
-void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos);
+/* bclintersection.c */
 
 int bcp_IntersectionBCLs(bcp p, bcl result, bcl a, bcl b); // result = a intersection with b
 int bcp_IntersectionBCL(bcp p, bcl a, bcl b);   // a = a intersection with b 
 
+/* bclexpand.c */
 
+void bcp_DoBCLSimpleExpand(bcp p, bcl l);
+void bcp_DoBCLExpandWithOffSet(bcp p, bcl l, bcl off);  // this operation does not do any SCC or MCC
+void bcp_DoBCLExpandWithCofactor(bcp p, bcl l);
+
+/* bclminimize.c */
 
 void bcp_MinimizeBCL(bcp p, bcl l);
-
-/*
-static __m128i m128i_get_n_bit_mask(uint16_t val, unsigned bit_pos)
-{
-  uint16_t a[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-  val <<= bit_pos & 0xf;
-  a[7-(bit_pos>>4)] = val;
-  return _mm_loadu_si128((__m128i *)a);
-}
-*/
-
-/*
-#define m128i_get_n_bit_mask(val, bit_pos) \
-  _mm_slli_si128(_mm_set_epi32(0, 0, 0, (val)<<(bit_pos&0x1f)), (bit_pos)>>5)
-*/
-
-/* limitation: the bitpattern in val must not cross a 32 bit boundery, for example val=3 and  bit_pos=31 is not allowed */
-/*
-#define m128i_get_n_bit_mask(val, bit_pos) \
-  _mm_set_epi32(  \
-    0==((bit_pos)>>5)?(((uint32_t)(val))<<(bit_pos&0x1f)):0, \
-    1==((bit_pos)>>5)?(((uint32_t)(val))<<(bit_pos&0x1f)):0, \
-    2==((bit_pos)>>5)?(((uint32_t)(val))<<(bit_pos&0x1f)):0, \
-    3==((bit_pos)>>5)?(((uint32_t)(val))<<(bit_pos&0x1f)):0 ) 
-*/
-
-/*
-#define m128i_get_1_bit_mask(bit_pos) \
-  m128i_get_n_bit_mask(1, bit_pos)
-*/
-
-/*
-#define m128i_get_bit_mask(bit_pos) \
-  _mm_slli_si128(_mm_set_epi32 (0, 0, 0, 1<<(bit_pos&0x1f)), (bit_pos)>>5)
-*/
-
-/*
-#define m128i_not(m) \
-  _mm_xor_si128(m, _mm_set1_epi16(0x0ffff))
-*/
-
-/*
-#define m128i_is_zero(m) \
-  ((_mm_movemask_epi8(_mm_cmpeq_epi16((m),_mm_setzero_si128())) == 0xFFFF)?1:0)
-*/
-
-#define m128i_is_equal(m1, m2) \
-  ((_mm_movemask_epi8(_mm_cmpeq_epi16((m1),(m2))) == 0xFFFF)?1:0)
-
-/* val=0..3, bit_pos=0..126 (must not be odd) */
-/*
-#define m128i_set_2_bit(m, val, bit_pos) \
- _mm_or_si128( m128i_get_n_bit_mask((val), (bit_pos)), _mm_andnot_si128(m128i_get_n_bit_mask(3, (bit_pos)), (m)) )
-*/
+void bcp_MinimizeBCLWithOnSet(bcp p, bcl l);
 
 /* bcselftest.c */
 
 bcl bcp_NewBCLWithRandomTautology(bcp p, int size, int dc2one_conversion_cnt);
 void internalTest(int var_cnt);
+void speedTest(int var_cnt);
+void minimizeTest(int cnt);
 
 
 
