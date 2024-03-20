@@ -69,8 +69,11 @@ void internalTest(int var_cnt)
   bcl l = bcp_NewBCL(p);
   bcl m = bcp_NewBCL(p);
   bcl n;
+  bcl nn;
   
   int tautology;
+  int equal;
+
   
   printf("tautology test 1\n");
   tautology = bcp_IsBCLTautology(p, t);
@@ -79,6 +82,10 @@ void internalTest(int var_cnt)
   printf("copy test\n");
   bcp_CopyBCL(p, l, t);
   assert( l->cnt == t->cnt );
+  
+  printf("equal test 1\n");
+  equal = bcp_IsBCLEqual(p, l, t);
+  assert( equal != 0 );
   
   printf("tautology test 2\n");
   tautology = bcp_IsBCLTautology(p, l);
@@ -142,6 +149,15 @@ void internalTest(int var_cnt)
   //bcp_DoBCLSingleCubeContainment(p, n);
   printf("simple expand new size %d\n", n->cnt);
 
+  printf("subtract complement test\n");
+  nn = bcp_NewBCLComplementWithSubtract(p, n);  // complement of the complement, so this should be equal to r
+  assert( nn->cnt != 0 );
+
+  printf("equal test 2\n");
+  equal = bcp_IsBCLEqual(p, r, nn);
+  assert( equal != 0 );
+
+
   printf("intersection test 3\n");
   bcp_IntersectionBCLs(p, m, n, r);
   printf("intersection result  m->cnt=%d n->cnt=%d r->cnt=%d\n", m->cnt, n->cnt, r->cnt);
@@ -156,7 +172,9 @@ void internalTest(int var_cnt)
   assert(tautology != 0);
 
 
+  bcp_DeleteBCL(p,  nn);
   bcp_DeleteBCL(p,  n);
+  bcp_DeleteBCL(p,  m);
   bcp_DeleteBCL(p,  t);
   bcp_DeleteBCL(p,  r);
   bcp_DeleteBCL(p,  l);

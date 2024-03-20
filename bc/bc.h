@@ -174,6 +174,7 @@ bcl bcp_NewBCLComplement(bcp p, bcl l);         // calls bcp_NewBCLComplementWit
 int bcp_IsBCLSubsetWithCofactor(bcp p, bcl a, bcl b);   //   test, whether "b" is a subset of "a", returns 1 if this is the case
 int bcp_IsBCLSubsetWithSubtract(bcp p, bcl a, bcl b);  // this fn seems to be much slower than bcp_IsBCLSubsetWithCofactor
 int bcp_IsBCLSubset(bcp p, bcl a, bcl b);       //   test, whether "b" is a subset of "a", calls bcp_IsBCLSubsetWithCofactor()
+int bcp_IsBCLEqual(bcp p, bcl a, bcl b);                // checks whether the two lists are equal
 
 
 /* bclintersection.c */

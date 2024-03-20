@@ -117,7 +117,7 @@ int main(void)
 {
   
   
-  //internalTest(19);
+  internalTest(19);
   //speedTest(21);
  
   minimizeTest(21);

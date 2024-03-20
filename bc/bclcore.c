@@ -180,6 +180,8 @@ int bcp_AddBCLCube(bcp p, bcl l)
   while ( l->max <= l->cnt )
     if ( bcp_ExtendBCL(p, l) == 0 )
       return -1;
+  assert( l->list != NULL );
+  assert( l->max > l->cnt );
   l->cnt++;
   bcp_ClrCube(p, bcp_GetBCLCube(p, l, l->cnt-1));
   l->flags[l->cnt-1] = 0;
@@ -192,6 +194,8 @@ int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c)
   while ( l->max <= l->cnt )
     if ( bcp_ExtendBCL(p, l) == 0 )
       return -1;
+  assert( l->list != NULL );
+  assert( l->max > l->cnt );
   l->cnt++;
   bcp_CopyCube(p, bcp_GetBCLCube(p, l, l->cnt-1), c);  
   l->flags[l->cnt-1] = 0;

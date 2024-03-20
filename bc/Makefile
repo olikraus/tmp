@@ -1,6 +1,9 @@
 # CFLAGS = -g -pg -Wall
 # CFLAGS = -O4 -march=silvermont -Wall
-CFLAGS = -g -pg -Wall
+# CFLAGS = -g -pg -Wall
+
+CFLAGS = -g -Wall -fsanitize=address
+# CFLAGS = -g -Wall 
 
 SRC = bcutil.c bcp.c bcube.c bclcore.c bcselftest.c bccofactor.c 
 SRC += bclcontainment.c bcltautology.c bclsubtract.c 
