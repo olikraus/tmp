@@ -53,7 +53,7 @@ co bc_ExecuteVector(cco in)
         if (coIsStr(cmdname))
         {
           const char *cmd = coStrGet(cmdname);
-          if ( strcmp(cmd, "load" ) )
+          if ( strcmp(cmd, "load" ) == 0 )
           {
             
           }
