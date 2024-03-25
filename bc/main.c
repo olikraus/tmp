@@ -113,7 +113,7 @@ int main1(void)
   return 0;
 }
 
-int main(void)
+int main2(void)
 {
   
   
@@ -122,5 +122,21 @@ int main(void)
  
   minimizeTest(21);
   return 0;
+}
+
+
+int main(int argc, char **argv)
+{
+  FILE *fp;
+  if ( argc <= 1 )
+  {
+    printf("%s jsonfile\n", argv[0]);
+    return 0;
+  }
+  fp = fopen(argv[1], "r");
+  if ( fp == NULL )
+    return perror(argv[1]), 0;
+  bc_ExecuteJSON(fp);
+  fclose(fp);
 }
 

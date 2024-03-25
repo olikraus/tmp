@@ -35,6 +35,7 @@
 
 #include <x86intrin.h>
 #include <stdint.h>
+#include <stdio.h>
 
 
 
@@ -130,6 +131,10 @@ int bcp_AddBCLCube(bcp p, bcl l); // add empty cube to list l, returns the posit
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c); // append cube c to list l, returns the position of the new cube or -1 in case of error
 int bcp_AddBCLCubesByBCL(bcp p, bcl a, bcl b); // append cubes from b to a, does not do any simplification, returns 0 on error
 int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s); // add cube(s) described as a string, returns 0 in case of error
+
+bcl bcp_NewBCLByString(bcp p, const char *s);   // create a bcl from a CR seprated list of cubes
+
+
 int *bcp_GetBCLVarCntList(bcp p, bcl l);
 
 /* bccofactor.c */
@@ -192,6 +197,10 @@ void bcp_DoBCLExpandWithCofactor(bcp p, bcl l);
 
 void bcp_MinimizeBCL(bcp p, bcl l);
 void bcp_MinimizeBCLWithOnSet(bcp p, bcl l);
+
+/* bcjson.c */
+
+int bc_ExecuteJSON(FILE *fp);
 
 /* bcselftest.c */
 

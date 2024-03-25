@@ -247,6 +247,17 @@ int bcp_AddBCLCubesByString(bcp p, bcl l, const char *s)
   return 0;     // memory error
 }
 
+bcl bcp_NewBCLByString(bcp p, const char *s)
+{
+  bcl l = bcp_NewBCL(p);
+  if ( l == NULL )
+    return NULL;
+  if ( bcp_AddBCLCubesByString(p, l, s) == 0 )
+    return bcp_DeleteBCL(p, l), NULL;
+  return l;
+}
+
+
 
 /*
   return a list with the variable count for each cube in the list.
