@@ -29,7 +29,7 @@
     - the new cube is not covered by any other cube in l
   After adding a cube, existing cubes are checked to be a subset of the newly added cube and marked for deletion if so
 */
-static void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
+static int bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
 {
   int i;
   unsigned bb;
@@ -47,11 +47,13 @@ static void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
       if ( new_aa != 0 )
       {
         bcp_SetCubeVar(p, a, i, new_aa);        // modify a 
-        bcp_AddBCLCubeByCube(p, l, a); // if a is not subcube of any existing cube, then add the modified a cube to the list
+        if ( bcp_AddBCLCubeByCube(p, l, a) < 0 ) // if a is not subcube of any existing cube, then add the modified a cube to the list
+          return 0;  // memory error
         bcp_SetCubeVar(p, a, i, orig_aa);        // undo the modification
       }
     }
   }
+  return 1; // success
 }
 
 /* 
@@ -60,22 +62,27 @@ static void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b)
   if is_mcc is 0, then the substract operation will generate all prime cubes.
   if b is unate, then executing mcc slows down the substract, otherwise if b is binate, then using mcc increases performance
 */
-void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc)
+int bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc)
 {
   int i, j;
   bcl result = bcp_NewBCL(p);
+  if ( result == NULL )
+    return 0;
   for( i = 0; i < b->cnt; i++ )
   {
     bcp_ClearBCL(p, result);
     for( j = 0; j < a->cnt; j++ )
     {
-      bcp_DoBCLSharpOperation(p, result, bcp_GetBCLCube(p, a, j), bcp_GetBCLCube(p, b, i));
+      if ( bcp_DoBCLSharpOperation(p, result, bcp_GetBCLCube(p, a, j), bcp_GetBCLCube(p, b, i)) == 0 )
+        return bcp_DeleteBCL(p, result), 0;
     }
-    bcp_CopyBCL(p, a, result);
+    if ( bcp_CopyBCL(p, a, result) == 0 )
+        return bcp_DeleteBCL(p, result), 0;
     bcp_DoBCLSingleCubeContainment(p, a);
     if ( is_mcc )
       bcp_DoBCLMultiCubeContainment(p, a);
   }
   bcp_DeleteBCL(p, result);
+  return 1; // success
 }
 

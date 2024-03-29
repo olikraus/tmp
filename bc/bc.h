@@ -164,8 +164,8 @@ int bcp_IsBCLTautology(bcp p, bcl l);
 
 /* bclsubtract.c */
 
-// oid bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
-void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);  // if is_mcc is 0, then the substract operation will generate all prime cubes.
+// void bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
+int bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);  // if is_mcc is 0, then the substract operation will generate all prime cubes. returns 0 for error
 
 /* bclcomplement.c */
 

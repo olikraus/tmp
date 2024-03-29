@@ -31,6 +31,13 @@
     if slot is present, then calculate intersection between slot 0 and the provided slot
       { "cmd":"intersection0", "slot":1 }
   
+  subtract0
+    Subtract a bcl/slot from slot 0 and store the result in slot 0
+    if bcl is present, then calculate slot 0 minus bcl.
+      { "cmd":"subtract0", "bcl":"11-0" }
+    if slot is present, then calculate slot 0 minus the given slot.
+      { "cmd":"subtract0", "slot":1 }
+  
   
     accu = accu intersection var
   subtract
@@ -173,7 +180,16 @@ int bc_ExecuteVector(cco in)
         bcp_IntersectionBCL(p, slot_list[0], arg);   // a = a intersection with b 
         assert(intersection_result != 0);
       }
+      else if ( p != NULL &&  strcmp(cmd, "subtract0") == 0 )
+      {
+        int subtract_result;
+        assert(slot_list[0] != NULL);
+        assert(arg != NULL);
+        bcp_SubtractBCL(p, slot_list[0], arg, 1);   // a = a minus b 
+        assert(subtract_result != 0);
+      }
       
+
 
       
     } // isMap
