@@ -38,10 +38,9 @@
     if slot is present, then calculate slot 0 minus the given slot.
       { "cmd":"subtract0", "slot":1 }
   
-  
-    accu = accu intersection var
-  subtract
-    accu = accu subtract var
+  exchange0
+    Exchange slot 0 and the given other slot
+      { "cmd":"exchange0", "slot":1 }
   
   
   store
