@@ -14,14 +14,24 @@
 
   Note: slot always defaults to 0
 
-  load
+  bcl2slot
     load the provided bcl into the given slot
+    { "cmd":"bcl2slot", "bcl":"110-", "slot":0 }
 
   show
     if bcl is present, then show bcl
-    if slot is present, then show the slot
+      { "cmd":"show", "slot":0 }
+    if slot is present, then show the slot content
+      { "cmd":"show", "bcl":"0011" }
 
-  intersection
+  intersection0
+    Calculate intersection and store the result in slot 0
+    if bcl is present, then calculate intersection between slot 0 and bcl.
+      { "cmd":"intersection0", "bcl":"11-0" }
+    if slot is present, then calculate intersection between slot 0 and the provided slot
+      { "cmd":"intersection0", "slot":1 }
+  
+  
     accu = accu intersection var
   subtract
     accu = accu subtract var
@@ -55,6 +65,7 @@ int bc_ExecuteVector(cco in)
   int slot = 0;
   const char *bclstr = NULL;
   bcl l = NULL;
+  bcl arg;              // argument.. either l or a slot
   int result = 0;
   
   for( i = 0; i < SLOT_CNT; i++ )
@@ -133,9 +144,10 @@ int bc_ExecuteVector(cco in)
       } // bcl is vector
 
       // STEP 2: Execute the command
+      arg = (l!=NULL)?l:slot_list[slot];
 
-      // "load"  "bcl" into "slot"
-      if ( p != NULL && strcmp(cmd, "load") == 0 )
+      // "bcl2slot"  "bcl" into "slot"
+      if ( p != NULL && strcmp(cmd, "bcl2slot") == 0 )
       {
         if ( l != NULL )
         {
@@ -148,16 +160,20 @@ int bc_ExecuteVector(cco in)
       // "show"  "bcl" or "show" bcl from "slot"
       else if ( p != NULL &&  strcmp(cmd, "show") == 0 )
       {
-        if ( l != NULL )
-        {
-          bcp_ShowBCL(p, l);
-        }
-        else if ( slot_list[slot] != NULL )
-        {
-          bcp_ShowBCL(p, slot_list[slot]);
-        }
-          
+        assert(arg != NULL);
+        bcp_ShowBCL(p, arg);
       }
+      // intersection0: calculate intersection with slot 0
+      // result is stored in slot 0
+      else if ( p != NULL &&  strcmp(cmd, "intersection0") == 0 )
+      {
+        int intersection_result;
+        assert(slot_list[0] != NULL);
+        assert(arg != NULL);
+        bcp_IntersectionBCL(p, slot_list[0], arg);   // a = a intersection with b 
+        assert(intersection_result != 0);
+      }
+      
 
       
     } // isMap
@@ -182,7 +198,7 @@ int bc_ExecuteJSON(FILE *fp)
 {
   co in = coReadJSONByFP(fp);
   if ( in == NULL )
-    return 0;
+    return puts("JSON read errror"), 0;
   bc_ExecuteVector(in);
   coDelete(in);
   return 1;

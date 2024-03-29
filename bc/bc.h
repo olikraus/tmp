@@ -162,10 +162,10 @@ void bcp_DoBCLMultiCubeContainment(bcp p, bcl l);
 int bcp_IsBCLTautology(bcp p, bcl l);
 
 
-/* bclsubstract.c */
+/* bclsubtract.c */
 
 // oid bcp_DoBCLSharpOperation(bcp p, bcl l, bc a, bc b);
-void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);
+void bcp_SubtractBCL(bcp p, bcl a, bcl b, int is_mcc);  // if is_mcc is 0, then the substract operation will generate all prime cubes.
 
 /* bclcomplement.c */
 
