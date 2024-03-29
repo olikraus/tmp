@@ -187,6 +187,15 @@ int bc_ExecuteVector(cco in)
         bcp_SubtractBCL(p, slot_list[0], arg, 1);   // a = a minus b 
         assert(subtract_result != 0);
       }
+      else if ( p != NULL &&  strcmp(cmd, "exchange0") == 0 )
+      {
+        bcl tmp;
+        assert(slot_list[0] != NULL);
+        assert(l != NULL);
+        tmp = l;
+        l = slot_list[0];
+        slot_list[0] = tmp;
+      }
       
 
 
