@@ -6,11 +6,24 @@
   [
     {
       label:"",
+      label0:"",
       cmd:"",
       bcl:"",
-      var:""   or slot:n
+      slot:n
     }     
   ]
+
+  label/label0
+    Output the current flags. If label0 is used, then also output the content of slot0.
+    
+  cmd
+    A command as described below.
+    
+  bcl
+    A boolean cube list, which is used as an argument to "cmd".
+    
+  slot
+    Another argument for some of the "cmd"s below. Defaults to 0.
 
   Note: slot always defaults to 0
 
@@ -75,6 +88,7 @@ int bc_ExecuteVector(cco in)
   cco o;
   const char *cmd = NULL;
   const char *label = NULL;
+  const char *label0 = NULL;
   int slot = 0;
   const char *bclstr = NULL;
   bcl l = NULL;
@@ -94,6 +108,7 @@ int bc_ExecuteVector(cco in)
     cco cmdmap = coVectorGet(in, i);
     cmd = NULL;
     label = NULL;
+    label0 = NULL;
     slot = 0;
     is_empty = -1;
     if ( l != NULL )
@@ -111,6 +126,10 @@ int bc_ExecuteVector(cco in)
       o = coMapGet(cmdmap, "label");
       if (coIsStr(o))
         label = coStrGet(o);
+
+      o = coMapGet(cmdmap, "label0");
+      if (coIsStr(o))
+        label0 = coStrGet(o);
 
       o = coMapGet(cmdmap, "slot");
       if (coIsDbl(o))
@@ -232,17 +251,30 @@ int bc_ExecuteVector(cco in)
 
       // STEP 3: Generate JSON output
     
-      if ( label != NULL )
+      if ( label != NULL || label0 != NULL )
       {
         co e = coNewMap(CO_STRDUP|CO_STRFREE|CO_FREE_VALS);
         assert( e != NULL );
         coMapAdd(e, "index", coNewDbl(i));
         //coMapAdd(e, "label", coNewStr(CO_STRDUP, label));
+        
         if ( is_empty >= 0 )
         {
           coMapAdd(e, "empty", coNewDbl(is_empty));          
         }
-        coMapAdd(output, label, e);
+        
+        if ( label0 != NULL && slot_list[0] != NULL )
+        {
+          int j;
+          co v = coNewVector(CO_FREE_VALS);
+          for( j = 0; j <  slot_list[0]->cnt; j++ )
+          {
+            coVectorAdd( v, coNewStr(CO_STRDUP, bcp_GetStringFromCube(p, bcp_GetBCLCube(p, slot_list[0], j))));
+          }
+          coMapAdd(e, "bcl", v);
+        }
+        
+        coMapAdd(output, label0 != NULL?label0:label, e);
       } // label
     } // isMap
     
