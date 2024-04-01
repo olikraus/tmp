@@ -42,6 +42,12 @@ bcp bcp_New(size_t var_cnt)
       //printf("p->bytes_per_cube_cnt=%d\n", p->bytes_per_cube_cnt);
       p->stack_depth = 0;
       p->cube_to_str = (char *)malloc(p->var_cnt+1);
+    
+      p->x_end = '.';
+      p->x_not = '!';
+      p->x_or = '|';
+      p->x_and = '&';
+    
       if ( p->cube_to_str != NULL )
       {
         p->stack_cube_list = bcp_NewBCL(p);

@@ -42,6 +42,7 @@
 typedef struct bcp_struct *bcp;
 typedef __m128i *bc;
 typedef struct bcl_struct *bcl;
+typedef struct bcx_struct *bcx;
 
 
 /* boolean cube problem, each function will require a pointer to this struct */
@@ -57,6 +58,12 @@ struct bcp_struct
   int stack_frame_pos[BCP_MAX_STACK_FRAME_DEPTH];
   int stack_depth;
   bcl global_cube_list;    // storage area for temp cubes
+  
+  int x_end;
+  int x_not;
+  int x_and;
+  int x_or;
+  
 };
 
 /* one cube, the number of __m128i is (var_cnt / 64) */
@@ -68,6 +75,25 @@ struct bcl_struct
   int last_deleted;
   __m128i *list;        // max * var_cnt / 64 entries
   uint8_t *flags;       // bit 0 is the cube deleted flag
+};
+
+/* boolean cube expression */
+#define BCX_TYPE_NONE 0
+#define BCX_TYPE_ID 1
+#define BCX_TYPE_NUM 2
+#define BCX_TYPE_AND 3
+#define BCX_TYPE_OR 4
+#define BCX_TYPE_BCL 5
+
+struct bcx_struct
+{
+  int type;
+  int is_not;           // 0 or 1
+  bcx next;
+  bcx down;
+  int val;
+  char *identifier;
+  bcl cube_list;
 };
 
 /*============================================================*/
