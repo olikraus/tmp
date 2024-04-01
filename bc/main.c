@@ -146,7 +146,13 @@ int main()
 {
   bcp p = bcp_New(1);
   bcx x = bcp_Parse(p, "a&b|c");
+  bcp_AddVarsFromBCX(p, x);
   bcp_ShowBCX(p, x);
+
+  //bcp_PrintBCX(p, x);
+  
+  coPrint(p->var_map); puts("");
+  
   bcp_DeleteBCX(p, x);
   bcp_Delete(p);
   puts("");

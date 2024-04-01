@@ -48,6 +48,9 @@ bcp bcp_New(size_t var_cnt)
       p->x_or = '|';
       p->x_and = '&';
     
+      p->var_map = NULL;
+      p->var_list = NULL;
+    
       if ( p->cube_to_str != NULL )
       {
         p->stack_cube_list = bcp_NewBCL(p);

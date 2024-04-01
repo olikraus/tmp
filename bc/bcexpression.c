@@ -324,6 +324,42 @@ void bcp_ShowBCX(bcp p, bcx x)
   }
 }
 
+/*============================================================*/
+
+void bcp_PrintBCX(bcp p, bcx x)
+{
+  if ( x == NULL )
+    return;
+  printf("%p: t=%d id=%s d=%p n=%p\n", x, x->type, x->identifier,  x->down, x->next);
+  bcp_PrintBCX(p, x->down);
+  bcp_PrintBCX(p, x->next);
+}
+
+/*============================================================*/
+
+int bcp_AddVar(bcp p, const char *s)
+{
+  if ( p->var_map == NULL )
+  {
+    p->var_map = coNewMap(CO_STRDUP|CO_STRFREE|CO_FREE_VALS);
+    if ( p->var_map == NULL )
+      return 0;
+  }  
+  if ( coMapExists(p->var_map, s) )
+    return 1;
+  return coMapAdd(p->var_map, s, NULL);
+}
+
+int bcp_AddVarsFromBCX(bcp p, bcx x)
+{
+  if ( x == NULL )
+    return 1;
+  if ( x->type == BCX_TYPE_ID )
+    bcp_AddVar(p, x->identifier);
+  if ( bcp_AddVarsFromBCX(p, x->down) == 0 )
+    return 0;
+  return bcp_AddVarsFromBCX(p, x->next);
+}
 
 /*============================================================*/
 

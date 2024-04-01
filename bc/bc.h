@@ -36,6 +36,7 @@
 #include <x86intrin.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "co.h"
 
 
 
@@ -64,6 +65,8 @@ struct bcp_struct
   int x_and;
   int x_or;
   
+  co var_map;           // map with all variables 
+  co var_list;                  // vector with all variables
 };
 
 /* one cube, the number of __m128i is (var_cnt / 64) */
@@ -229,6 +232,12 @@ void bcp_MinimizeBCLWithOnSet(bcp p, bcl l);
 bcx bcp_NewBCX(bcp p);
 void bcp_DeleteBCX(bcp p, bcx x);
 void bcp_ShowBCX(bcp p, bcx x);
+
+void bcp_PrintBCX(bcp p, bcx x);
+
+int bcp_AddVar(bcp p, const char *s);
+int bcp_AddVarsFromBCX(bcp p, bcx x);
+
 bcx bcp_Parse(bcp p, const char *s);
 
 
