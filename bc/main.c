@@ -145,7 +145,7 @@ int main3(int argc, char **argv)
 int main()
 {
   bcp p = bcp_New(1);
-  bcx x = bcp_Parse(p, "a&b");
+  bcx x = bcp_Parse(p, "a&b|c");
   bcp_ShowBCX(p, x);
   bcp_DeleteBCX(p, x);
   bcp_Delete(p);

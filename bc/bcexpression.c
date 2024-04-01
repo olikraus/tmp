@@ -5,6 +5,7 @@
 */
 #include "bc.h"
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -210,11 +211,11 @@ bcx bcp_ParseAND(bcp p, const char **s)
   bcx binop, xx;
   if ( x == NULL )
     return NULL;
-  if ( **s != p->x_or )
+  if ( **s != p->x_and )
     return x;
   
   binop = bcp_NewBCX(p);
-  binop->type = BCX_TYPE_OR;
+  binop->type = BCX_TYPE_AND;
   binop->down = x;
   
   while ( **s == p->x_and )
@@ -269,7 +270,11 @@ bcx bcp_ParseOR(bcp p, const char **s)
 
 void bcp_ShowBCX(bcp p, bcx x)
 {
-  if ( x->is_not )
+  int is_not;
+  if ( x == NULL )
+    return;
+  is_not = x->is_not;
+  if ( is_not )
   {
     printf("%c(", p->x_not);
   }
@@ -282,24 +287,30 @@ void bcp_ShowBCX(bcp p, bcx x)
       printf("%d", x->val);
       break;
     case BCX_TYPE_AND:
-      printf("%d", x->val);
       x = x->down;
+      printf("(");
       while( x != NULL )
       {
         bcp_ShowBCX(p, x);
+        if ( x->next == NULL )
+          break;
         printf("%c", p->x_and);
         x = x->next;
       }
+      printf(")");
       break;
     case BCX_TYPE_OR:
-      printf("%d", x->val);
       x = x->down;
+      printf("(");
       while( x != NULL )
       {
         bcp_ShowBCX(p, x);
-        printf("%c", p->x_and);
+        if ( x->next == NULL )
+          break;
+        printf("%c", p->x_or);
         x = x->next;
       }
+      printf(")");
       break;
     case BCX_TYPE_BCL:
       printf("BCL");
@@ -307,7 +318,7 @@ void bcp_ShowBCX(bcp p, bcx x)
     default:
       break;
   }
-  if ( x->is_not )
+  if ( is_not )
   {
     printf(")");
   }
