@@ -125,7 +125,7 @@ int main2(void)
 }
 
 
-int main(int argc, char **argv)
+int main3(int argc, char **argv)
 {
   FILE *fp;
   if ( argc <= 1 )
@@ -138,5 +138,17 @@ int main(int argc, char **argv)
     return perror(argv[1]), 0;
   bc_ExecuteJSON(fp);
   fclose(fp);
+  return 0;
 }
 
+
+int main()
+{
+  bcp p = bcp_New(1);
+  bcx x = bcp_Parse(p, "a&b");
+  bcp_ShowBCX(p, x);
+  bcp_DeleteBCX(p, x);
+  bcp_Delete(p);
+  puts("");
+  return 0;
+}

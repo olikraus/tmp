@@ -224,9 +224,19 @@ void bcp_DoBCLExpandWithCofactor(bcp p, bcl l);
 void bcp_MinimizeBCL(bcp p, bcl l);
 void bcp_MinimizeBCLWithOnSet(bcp p, bcl l);
 
+/* bcexpression.c */
+
+bcx bcp_NewBCX(bcp p);
+void bcp_DeleteBCX(bcp p, bcx x);
+void bcp_ShowBCX(bcp p, bcx x);
+bcx bcp_Parse(bcp p, const char *s);
+
+
 /* bcjson.c */
 
 int bc_ExecuteJSON(FILE *fp);
+
+
 
 /* bcselftest.c */
 

@@ -120,6 +120,7 @@ static const char *bcp_get_identifier(bcp p, const char **s)
       {
         if ( i+1 < BCP_IDENTIFIER_MAX )
           identifier[i++] = **s;
+        (*s)++;
       }
       else
       {
@@ -142,8 +143,15 @@ static int bcp_get_value(bcp p, const char **s)
       if ( **s == '\0' || **s == p->x_end )
         break;
       if ( isdigit(**s) )
+      {
         v = (v*10) + (**s) - '0';
-    }
+        (*s)++;
+      }
+      else
+      {
+        break;
+      }
+    } // for
   }
   bcp_skip_space(p, s);
   return v;
@@ -258,6 +266,56 @@ bcx bcp_ParseOR(bcp p, const char **s)
 }
 
 /*============================================================*/
+
+void bcp_ShowBCX(bcp p, bcx x)
+{
+  if ( x->is_not )
+  {
+    printf("%c(", p->x_not);
+  }
+  switch(x->type)
+  {
+    case BCX_TYPE_ID:
+      printf("%s", x->identifier);
+      break;
+    case BCX_TYPE_NUM:
+      printf("%d", x->val);
+      break;
+    case BCX_TYPE_AND:
+      printf("%d", x->val);
+      x = x->down;
+      while( x != NULL )
+      {
+        bcp_ShowBCX(p, x);
+        printf("%c", p->x_and);
+        x = x->next;
+      }
+      break;
+    case BCX_TYPE_OR:
+      printf("%d", x->val);
+      x = x->down;
+      while( x != NULL )
+      {
+        bcp_ShowBCX(p, x);
+        printf("%c", p->x_and);
+        x = x->next;
+      }
+      break;
+    case BCX_TYPE_BCL:
+      printf("BCL");
+      break;
+    default:
+      break;
+  }
+  if ( x->is_not )
+  {
+    printf(")");
+  }
+}
+
+
+/*============================================================*/
+
 
 bcx bcp_Parse(bcp p, const char *s)
 {
