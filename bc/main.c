@@ -145,13 +145,16 @@ int main3(int argc, char **argv)
 int main()
 {
   bcp p = bcp_New(1);
-  bcx x = bcp_Parse(p, "a&b|c");
+  bcx x = bcp_Parse(p, "a&b|c&b");
   bcp_AddVarsFromBCX(p, x);
   bcp_ShowBCX(p, x);
-
+  bcp_BuildVarList(p);
+  
+  
   //bcp_PrintBCX(p, x);
   
   coPrint(p->var_map); puts("");
+  coPrint(p->var_list); puts("");
   
   bcp_DeleteBCX(p, x);
   bcp_Delete(p);

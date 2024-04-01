@@ -94,6 +94,11 @@ void bcp_Delete(bcp p)
     return ;
   bcp_DeleteBCL(p, p->global_cube_list);
   bcp_DeleteBCL(p, p->stack_cube_list);
+  if ( p->var_list != NULL )
+    coDelete(p->var_list);
+  if ( p->var_map != NULL )
+    coDelete(p->var_map);
+  
   free(p->cube_to_str);
   free(p);
 }

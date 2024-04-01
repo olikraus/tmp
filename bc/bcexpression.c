@@ -361,6 +361,30 @@ int bcp_AddVarsFromBCX(bcp p, bcx x)
   return bcp_AddVarsFromBCX(p, x->next);
 }
 
+/* build var_list from var_map */
+int bcp_BuildVarList(bcp p)
+{
+  coMapIterator iter;
+  if ( p->var_list == NULL )
+  {
+    p->var_list = coNewVector(CO_FREE_VALS);
+    if ( p->var_list == NULL )
+      return 0;
+  }
+  coVectorClear(p->var_list);
+
+  if ( coMapLoopFirst(&iter, p->var_map) )
+  {
+    do 
+    {
+      if ( coVectorAdd( p->var_list, coNewStr(0, coMapLoopKey(&iter)) ) < 0 )
+        return 0;
+    } while( coMapLoopNext(&iter) );
+  }
+  
+  return 1;
+}
+
 /*============================================================*/
 
 
