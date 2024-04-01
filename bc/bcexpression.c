@@ -4,7 +4,13 @@
 
 */
 #include "bc.h"
-#include <ctyle.h>
+#include <ctype.h>
+#include <string.h>
+
+
+/*============================================================*/
+/* forward declaration */
+bcx bcp_ParseOR(bcp p, const char **s);
 
 /*============================================================*/
 
@@ -29,8 +35,8 @@ void bcp_DeleteBCX(bcp p, bcx x)
 {
   if ( x == NULL )
     return;
-  bcp_DeleteBCX(x->down);
-  bcp_DeleteBCX(x->next);
+  bcp_DeleteBCX(p, x->down);
+  bcp_DeleteBCX(p, x->next);
   x->type = BCX_TYPE_NONE;
   if ( x->identifier != NULL )
   {
@@ -39,7 +45,7 @@ void bcp_DeleteBCX(bcp p, bcx x)
   }
   if ( x->cube_list != NULL )
   {
-    bcp_DeleteBCL(x->cube_list);
+    bcp_DeleteBCL(p, x->cube_list);
     x->cube_list = NULL;
   }
   free(x);
@@ -76,7 +82,7 @@ bcx bcp_NewBCXIdentifier(bcp p, const char *identifier)
 
 
 
-void bcp_ParseError(bcp p, const char *error_msg);
+void bcp_ParseError(bcp p, const char *error_msg)
 {
   puts(error_msg);
 }
@@ -84,7 +90,7 @@ void bcp_ParseError(bcp p, const char *error_msg);
 
 /*============================================================*/
 
-static void bcp_skip_space(bcp p, char **s)
+static void bcp_skip_space(bcp p, const char **s)
 {
   for(;;)
   {
@@ -99,7 +105,7 @@ static void bcp_skip_space(bcp p, char **s)
 }
 
 #define BCP_IDENTIFIER_MAX 1024
-static void bcp_get_identifier(bcp p, char **s)
+static const char *bcp_get_identifier(bcp p, const char **s)
 {
   static char identifier[BCP_IDENTIFIER_MAX];
   int i = 0;
@@ -126,7 +132,7 @@ static void bcp_get_identifier(bcp p, char **s)
   return identifier;
 }
 
-static int bcp_get_value(bcp p, char **s)
+static int bcp_get_value(bcp p, const char **s)
 {
   int v = 0;
   if ( isdigit(**s) )
@@ -143,7 +149,9 @@ static int bcp_get_value(bcp p, char **s)
   return v;
 }
 
-bcx bcp_ParseAtom(bcp p, char **s)
+/*============================================================*/
+
+bcx bcp_ParseAtom(bcp p, const char **s)
 {
   static char msg[32];
   bcx x;
@@ -188,7 +196,7 @@ bcx bcp_ParseAtom(bcp p, char **s)
   return NULL;
 }
 
-bcx bcp_ParseAND(bcp p, char **s)
+bcx bcp_ParseAND(bcp p, const char **s)
 {
   bcx x = bcp_ParseAtom(p, s);
   bcx binop, xx;
@@ -219,7 +227,7 @@ bcx bcp_ParseAND(bcp p, char **s)
 }
 
 
-bcx bcp_ParseOR(bcp p, char **s)
+bcx bcp_ParseOR(bcp p, const char **s)
 {
   bcx x = bcp_ParseAND(p, s);
   bcx binop, xx;
@@ -248,4 +256,14 @@ bcx bcp_ParseOR(bcp p, char **s)
   
   return binop;
 }
+
+/*============================================================*/
+
+bcx bcp_Parse(bcp p, const char *s)
+{
+  const char **t = &s; 
+  bcp_skip_space(p, t);    
+  return bcp_ParseOR(p, t);
+}
+
 
