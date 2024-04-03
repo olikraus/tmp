@@ -91,7 +91,7 @@ void bcp_ParseError(bcp p, const char *error_msg)
 
 /*============================================================*/
 
-static void bcp_skip_space(bcp p, const char **s)
+void bcp_skip_space(bcp p, const char **s)
 {
   for(;;)
   {
@@ -106,7 +106,7 @@ static void bcp_skip_space(bcp p, const char **s)
 }
 
 #define BCP_IDENTIFIER_MAX 1024
-static const char *bcp_get_identifier(bcp p, const char **s)
+const char *bcp_get_identifier(bcp p, const char **s)
 {
   static char identifier[BCP_IDENTIFIER_MAX];
   int i = 0;
@@ -134,7 +134,7 @@ static const char *bcp_get_identifier(bcp p, const char **s)
   return identifier;
 }
 
-static int bcp_get_value(bcp p, const char **s)
+int bcp_get_value(bcp p, const char **s)
 {
   int v = 0;
   if ( isdigit(**s) )

@@ -166,6 +166,12 @@ bcl bcp_NewBCLByString(bcp p, const char *s);   // create a bcl from a CR seprat
 
 int *bcp_GetBCLVarCntList(bcp p, bcl l);
 
+/* bcldimacscnf.c */
+
+bcp bcp_NewByDIMACSCNF(FILE *fp);
+bcl bcp_NewBCLByDIMACSCNF(bcp p, FILE *fp);   // create a bcl from a DIMACS CNF
+
+
 /* bccofactor.c */
 
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l);
@@ -228,6 +234,11 @@ void bcp_MinimizeBCL(bcp p, bcl l);
 void bcp_MinimizeBCLWithOnSet(bcp p, bcl l);
 
 /* bcexpression.c */
+
+
+void bcp_skip_space(bcp p, const char **s);
+const char *bcp_get_identifier(bcp p, const char **s);
+int bcp_get_value(bcp p, const char **s);
 
 bcx bcp_NewBCX(bcp p);
 void bcp_DeleteBCX(bcp p, bcx x);
