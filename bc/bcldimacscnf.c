@@ -139,13 +139,15 @@ int bcp_AddBCLCubesByDIMACSCNF(bcp p, bcl l, FILE *fp)
   
   for(;;)
   {
+    if ( fp_current_char < 0 )
+        return 1;
     if ( fp_current_char == 'c' ||   fp_current_char == 'C' || fp_current_char == 'p' || fp_current_char == 'P')
     {
       for(;;)
       {
         fp_current_char = fgetc(fp);
         if ( fp_current_char < 0 )
-          return 0;
+          return 1;
         if ( fp_current_char == '\r' || fp_current_char == '\n' )
           break;
       }
@@ -168,21 +170,28 @@ int bcp_AddBCLCubesByDIMACSCNF(bcp p, bcl l, FILE *fp)
           for(;;)
           {
             var = fp_get_value(fp);
-            if ( var < 0 )
-              return 1;         // all done
             if ( var == 0 )     // the value 0 terminates the clause
               break;
             if ( var < 0 )
             {
-              bcp_SetCubeVar(p, c, var, 2);     // invert the minterm and assign "one" 
+              bcp_SetCubeVar(p, c, -var-1, 2);     // invert the minterm and assign "one" 
             }
             else
             {
-              bcp_SetCubeVar(p, c, var, 1);     // assign zero
-            }              
+              bcp_SetCubeVar(p, c, var-1, 1);     // assign zero
+            }           
+            if ( fp_current_char < 0 )
+              return 1;
+            
           } // for(;;)
         } // add cube        
       } // isdigit
+      else
+      {
+        fp_current_char = fgetc(fp);
+        fp_skip_space(fp);
+        
+      }
     }
   } // for(;;)
 }
@@ -194,6 +203,7 @@ bcp bcp_NewByDIMACSCNF(FILE *fp)
   int clause_cnt = 0;
   if ( bcp_GetVarCntFromDIMACSCNF(fp, &var_cnt, &clause_cnt) == 0 )
     return NULL;
+  
   return bcp_New(var_cnt);
 }
 

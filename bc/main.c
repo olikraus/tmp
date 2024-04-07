@@ -2,6 +2,8 @@
 #include "bc.h"
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/times.h>
 
 /*============================================================*/
 
@@ -142,7 +144,7 @@ int main3(int argc, char **argv)
 }
 
 
-int main()
+int main4()
 {
   bcp p = bcp_New(1);
   bcx x = bcp_Parse(p, "a&b|c&b");
@@ -160,4 +162,83 @@ int main()
   bcp_Delete(p);
   puts("");
   return 0;
+}
+
+/*============================================================*/
+
+
+int bc_ExecuteJSONFile(const char *jsonfilename)
+{
+  FILE *fp = fopen(jsonfilename, "r");
+  if ( fp == NULL )
+    return perror(jsonfilename), 0;
+  bc_ExecuteJSON(fp);
+  fclose(fp);
+  return 1;
+}
+
+int bc_ExecuteDIMACSCNF(const char *dimacscnffilename)
+{
+  FILE *fp = fopen(dimacscnffilename, "r");
+  bcp p;
+  bcl l;
+  int is_tautology;
+  if ( fp == NULL )
+    return perror(dimacscnffilename), 0;
+  printf("DIMACS CNF read from %s\n", dimacscnffilename);
+  p = bcp_NewByDIMACSCNF(fp);
+  l = bcp_NewBCLByDIMACSCNF(p, fp);   // create a bcl from a DIMACS CNF
+  printf("DIMACS CNF with %d clauses\n", l->cnt);
+  
+  is_tautology = bcp_IsBCLTautology(p, l);
+  printf("DIMACS CNF tautology=%d\n", is_tautology);
+
+  
+  fclose(fp);
+  return 1;
+}
+
+void help()
+{
+  puts("-json <json file>");
+  puts("-dimacscnf <dimacs cnf file>");
+}
+
+int main(int argc, char **argv)
+{
+  struct tms start, end;
+  if ( *argv == NULL )
+      return 0;
+  times(&start);
+  argv++;    // skip program name
+  for(;;)
+  {
+    if ( (*argv) == NULL )
+      break;
+    if ( strcmp(*argv, "-json") == 0 )
+    {
+      argv++;
+      if ( (*argv) == NULL )
+        return puts("JSON filename missing"), 1;
+      bc_ExecuteJSONFile(*argv);
+      argv++;
+    }
+    else if ( strcmp(*argv, "-dimacscnf") == 0 )
+    {
+      argv++;
+      if ( (*argv) == NULL )
+        return puts("DIMACS CNF filename missing"), 1;
+      bc_ExecuteDIMACSCNF(*argv);
+      argv++;
+    }
+    else
+    {
+      argv++;
+      help();
+      return 1;
+    }
+      
+  }
+  printf("user time: %lld\n", (long long int)(end.tms_utime-start.tms_utime));
+  times(&end);
 }

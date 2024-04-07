@@ -68,7 +68,7 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   }
 #endif
   
-  //printf("depth %d, split var %d, size %d\n", depth, var_pos, l->cnt);
+  printf("depth %d, split var %d, size %d\n", depth, var_pos, l->cnt);
   /*
   if ( var_pos < 0 )
   {
