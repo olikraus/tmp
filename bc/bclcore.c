@@ -136,6 +136,19 @@ void bcp_ShowBCL(bcp p, bcl l)
   }
 }
 
+int bcp_IsPurgeUsefull(bcp p, bcl l)
+{
+  int i = 0;
+  int cnt = l->cnt;
+  
+  for( i = 0; i < cnt; i++ )
+  {
+    if ( l->flags[i] != 0 )
+      return 1;
+  }
+  return 0;
+}
+
 /*
   remove cubes from the list, which are maked as deleted
 */

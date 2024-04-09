@@ -13,6 +13,7 @@
 #include <assert.h>
 
 
+
 /* 16 bit version */
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l)
 {
@@ -446,6 +447,57 @@ static void bcp_DoBCLSubsetCubeMark(bcp p, bcl l, int pos)
 }
 
 
+/*
+  check whether a variable is only DC in all cubes
+*/
+int bcp_IsBCLVariableDC(bcp p, bcl l, unsigned var_pos)
+{
+  int i;
+  int cnt = l->cnt;
+  bc c;
+  for( i = 0; i < cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      c = bcp_GetBCLCube(p, l, i);
+      if ( bcp_GetCubeVar(p, c, var_pos) != 3 )
+        return 0;
+    }
+  }
+  return 1;
+}
+
+/*
+  check whether a variable is unate with respect to "value".
+  This means only DC or the value may appear in all cubes at the given var_pos;
+*/
+int bcp_IsBCLVariableUnate(bcp p, bcl l, unsigned var_pos, unsigned value)
+{
+  int i;
+  int cnt = l->cnt;
+  bc c;
+  unsigned v;
+  /*
+  if ( var_pos >= p->var_cnt )
+  {
+    printf("var_pos=%d, var_cnt=%d\n", var_pos, p->var_cnt);
+  }
+  */
+  assert( var_pos < p->var_cnt );
+  
+  for( i = 0; i < cnt; i++ )
+  {
+    if ( l->flags[i] == 0 )
+    {
+      c = bcp_GetBCLCube(p, l, i);
+      assert( c != NULL );
+      v = bcp_GetCubeVar(p, c, var_pos);
+      if ( v != 3 && v != value  )
+        return 0;
+    }
+  }
+  return 1;
+}
 
 
 

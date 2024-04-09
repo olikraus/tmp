@@ -134,6 +134,9 @@ void bcp_SetCubeByString(bcp p, bc c, const char *s);
 /* boolean functions */
 
 int bcp_IsTautologyCube(bcp p, bc c);
+void bcp_GetVariableMask(bcp p, bc mask, bc c);
+int bcp_IsAndZero(bcp p, bc a, bc b);           // check if the bitwise AND is zero, should be used together with bcp_GetVariableMask()
+unsigned bcp_OrBitCnt(bcp p, bc r, bc a, bc b);
 int bcp_IntersectionCube(bcp p, bc r, bc a, bc b); // returns 0, if there is no intersection
 int bcp_IsIntersectionCube(bcp p, bc a, bc b); // returns 0, if there is no intersection
 int bcp_IsIllegal(bcp p, bc c);                                 // check whether "c" contains "00" codes
@@ -155,6 +158,7 @@ int bcp_ExtendBCL(bcp p, bcl l);
 #define bcp_GetBCLCube(p, l, pos) \
   (bc)(((uint8_t *)((l)->list)) + (pos) * (p)->bytes_per_cube_cnt)
 void bcp_ShowBCL(bcp p, bcl l);
+int bcp_IsPurgeUsefull(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 int bcp_AddBCLCube(bcp p, bcl l); // add empty cube to list l, returns the position of the new cube or -1 in case of error
 int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c); // append cube c to list l, returns the position of the new cube or -1 in case of error
@@ -177,6 +181,8 @@ bcl bcp_NewBCLByDIMACSCNF(bcp p, FILE *fp);   // create a bcl from a DIMACS CNF
 void bcp_CalcBCLBinateSplitVariableTable(bcp p, bcl l);
 int bcp_GetBCLMaxBinateSplitVariableSimple(bcp p, bcl l);
 int bcp_GetBCLMaxBinateSplitVariable(bcp p, bcl l);
+int bcp_IsBCLVariableDC(bcp p, bcl l, unsigned var_pos);
+int bcp_IsBCLVariableUnate(bcp p, bcl l, unsigned var_pos, unsigned value);
 void bcp_DoBCLOneVariableCofactor(bcp p, bcl l, unsigned var_pos, unsigned value);
 bcl bcp_NewBCLCofacterByVariable(bcp p, bcl l, unsigned var_pos, unsigned value);       // create a new list, which is the cofactor from "l"
 void bcp_DoBCLCofactorByCube(bcp p, bcl l, bc c, int exclude);         
@@ -193,6 +199,8 @@ void bcp_DoBCLMultiCubeContainment(bcp p, bcl l);
 
 
 /* bcltautology.c */
+
+int bcp_is_bcl_partition(bcp p, bcl l);
 
 int bcp_IsBCLTautology(bcp p, bcl l);
 

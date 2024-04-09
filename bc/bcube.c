@@ -144,6 +144,67 @@ int bcp_IntersectionCube(bcp p, bc r, bc a, bc b)
   return 0;
 }
 
+/*
+  Each variable value will be mapped in the following way:
+    00 --> 01 (can be ignored)
+    01 --> 01
+    10 --> 01
+    11 --> 00
+
+    This means, that we will have the code 01 for any dc
+*/
+void bcp_GetVariableMask(bcp p, bc mask, bc c)
+{
+  int i, cnt = p->blk_cnt;
+  __m128i z = _mm_loadu_si128(bcp_GetBCLCube(p, p->global_cube_list, 1));
+  __m128i r;
+  for( i = 0; i < cnt; i++ )
+  {    
+    r = _mm_loadu_si128(c+i); 
+    r = _mm_and_si128( r, _mm_srai_epi16(r,1));          // r = r & (r >> 1)     this will generate x1 for DC values
+    r = _mm_andnot_si128(r, z);                                    // r = ~r & 01   this will generate 00 for DC and 01 for "10" and "01" (and also for "00")
+    _mm_storeu_si128(mask+i, r);          // and store the result in the destination cube    
+  }
+}
+
+/*
+  does a bitwise and operation and checks whether the result is bitwise zeor
+  This is used together with bcp_GetVariableMask()
+*/
+int bcp_IsAndZero(bcp p, bc a, bc b)
+{
+  int i, cnt = p->blk_cnt;
+  __m128i zz = _mm_loadu_si128(bcp_GetBCLCube(p, p->global_cube_list, 0));
+  __m128i rr;
+  
+  for( i = 0; i < cnt; i++ )
+  {    
+    rr = _mm_and_si128(_mm_loadu_si128(a+i), _mm_loadu_si128(b+i));      // calculate bitwise AND
+    if ( _mm_movemask_epi8(_mm_cmpeq_epi8(rr, zz)) != 0xFFFF )          // check if any bit is not zero
+      return 0;         // some none-zero bits detected
+  }
+  return 1;     // all zero after bitwise AND
+}
+
+/*
+  do a bitwise or and return the number of bits in the result;
+*/
+unsigned bcp_OrBitCnt(bcp p, bc r, bc a, bc b)
+{
+  int i, cnt = p->blk_cnt;
+  __m128i rr;
+  unsigned bitcnt = 0;
+  for( i = 0; i < cnt; i++ )
+  {    
+    rr = _mm_or_si128(_mm_loadu_si128(a+i), _mm_loadu_si128(b+i));      // calculate bitwise OR
+    _mm_storeu_si128(r+i, rr);          // and store the bitwise or result in the destination cube
+    
+    bitcnt += __builtin_popcountll(_mm_cvtsi128_si64(_mm_unpackhi_epi64(rr, rr)));
+    bitcnt += __builtin_popcountll(_mm_cvtsi128_si64(rr));    
+  }
+  return bitcnt;
+}
+
 int bcp_IsIntersectionCube(bcp p, bc a, bc b)
 {
   int i, cnt = p->blk_cnt;

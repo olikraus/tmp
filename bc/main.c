@@ -80,41 +80,6 @@ int mainy(void)
 
 
 
-int main1(void)
-{
-  char *s = 
-"-11\n"
-"110\n"
-"11-\n"
-"0--\n"
-  ;
-  
-  bcp p = bcp_New(bcp_GetVarCntFromString(s));
-  bcl l = bcp_NewBCL(p);
-  //bcl n;
-
-  bcp_AddBCLCubesByString(p, l, s);
-  puts("original:");
-  bcp_ShowBCL(p, l);
-
-  //n = bcp_NewBCLCofactorByCube(p, l, bcp_GetBCLCube(p, l, 2), 2);
-  bcp_DoBCLMultiCubeContainment(p, l);
-
-  puts("MCC:");
-  bcp_ShowBCL(p, l);
-  /*
-  puts("cofactor:");
-  bcp_ShowBCL(p, n);
-  printf("tautology=%d\n", bcp_IsBCLTautology(p, n));   // do a tautology test 
-  */
-  
-  bcp_DeleteBCL(p,  l);
-  //bcp_DeleteBCL(p,  n);
-
-  bcp_Delete(p);  
-  return 0;
-}
-
 int main2(void)
 {
   
@@ -241,4 +206,35 @@ int main(int argc, char **argv)
   }
   printf("user time: %lld\n", (long long int)(end.tms_utime-start.tms_utime));
   times(&end);
+  return 0;
 }
+
+
+int main1(void)
+{
+  char *s = 
+"---11\n"
+"--110\n"
+"--11-\n"
+"--0--\n"
+"1----\n"
+  ;
+  
+  bcp p = bcp_New(bcp_GetVarCntFromString(s));
+  bcl l = bcp_NewBCL(p);
+  //bcl n;
+  int r;
+
+  bcp_AddBCLCubesByString(p, l, s);
+  puts("original:");
+  bcp_ShowBCL(p, l);
+
+  r = bcp_is_bcl_partition( p, l);
+  printf("r=%d\n", r);
+  bcp_DeleteBCL(p,  l);
+  //bcp_DeleteBCL(p,  n);
+
+  bcp_Delete(p);  
+  return 0;
+}
+
