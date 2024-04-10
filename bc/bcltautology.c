@@ -16,7 +16,7 @@
 #include <assert.h>
 
 
-//#define BC_TAUT_DEBUG 
+#define BC_TAUT_DEBUG 
 
 
 #ifdef BC_TAUT_DEBUG 
@@ -85,10 +85,14 @@ int bcp_is_bcl_partition(bcp p, bcl l)
   bcp_StartCubeStackFrame(p);  
   mask = bcp_GetTempCube(p);
   mask2 = bcp_GetTempCube(p);
+  
+  // take the first cube in the list as a starting point
+  
   bcp_GetVariableMask(p, mask, bcp_GetBCLCube(p, l, 0));
   bitcnt = bcp_OrBitCnt(p, mask, mask, mask);
   
   // in the first step, try to see, how much variables are reached
+  
   do
   {
     // printf("mask = %s\n", bcp_GetStringFromCube(p, mask));
@@ -118,7 +122,7 @@ int bcp_is_bcl_partition(bcp p, bcl l)
     if ( bcp_IsAndZero(p, mask, mask2) )
     {
       other_partition_cnt++;            // partition found
-      l->flags[0] = 1;
+      l->flags[i] = 1;
     }
   }
   
@@ -129,7 +133,8 @@ int bcp_is_bcl_partition(bcp p, bcl l)
   // for one partion all flags are zero, for the other parition the flags are 1
 
   bcp_EndCubeStackFrame(p);  
-  printf("Partition %d/%d\n", other_partition_cnt, l->cnt);
+  //printf("Partition %d/%d\n", other_partition_cnt, l->cnt);
+  //bcp_ShowBCL(p, l);
   return 1;
 }
 
@@ -141,7 +146,7 @@ bcl bcp_NewBCLByFlag(bcp p, bcl l, uint8_t flag)
   for( i = 0; i < cnt; i++ )
   {
     if ( l->flags[i] == flag )
-      if ( bcp_AddBCLCubeByCube(p, ll, bcp_GetBCLCube(p, l, i)) == 0 )
+      if ( bcp_AddBCLCubeByCube(p, ll, bcp_GetBCLCube(p, l, i)) < 0 )
       {
         return bcp_DeleteBCL(p, ll), NULL;
       }
@@ -172,7 +177,29 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   //assert( bcp_IsPurgeUsefull(p, l) == 0 );
 
   //bcp_PurgeBCL(p, l);
-  //bcp_is_bcl_partition(p, l);
+  if ( l->cnt > 1 )
+  {
+    if ( bcp_is_bcl_partition(p, l) != 0 )
+    {
+      f1 = bcp_NewBCLByFlag(p, l, 0);
+      f2 = bcp_NewBCLByFlag(p, l, 1);
+      assert( f1 != NULL );
+      assert( f2 != NULL );
+      memset(l->flags, 0, l->cnt);      // clear all flags which had been set by the partition finder
+
+#ifdef BC_TAUT_DEBUG 
+  bc_var_stack[depth] = -2;
+#endif // BC_TAUT_DEBUG
+      
+      // if either f1 or f2 is a tautology, then the complete list is tautology
+      if ( bcp_IsBCLTautologySub(p, f1, depth+1) != 0 )
+        return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
+      if ( bcp_IsBCLTautologySub(p, f2, depth+1) != 0 )
+        return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
+
+      return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0; // neither f1 nor f2 are tautology, return 0;
+    }
+  }
   
   bcp_CalcBCLBinateSplitVariableTable(p, l);
 
@@ -219,8 +246,6 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   for( int i = 0; i <= depth; i++ )
     printf("%02d ", bc_var_stack[i]);
   printf("depth %d, size %d, crc %08lx\n", depth, l->cnt,   (unsigned long)rc_crc32(0, (void *)l->list, p->bytes_per_cube_cnt*l->cnt));
-  
-
   bcp_ShowBCL(p, l);
 #endif // BC_TAUT_DEBUG
   
