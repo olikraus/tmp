@@ -16,7 +16,7 @@
 #include <assert.h>
 
 
-#define BC_TAUT_DEBUG 
+//#define BC_TAUT_DEBUG 
 
 
 #ifdef BC_TAUT_DEBUG 
@@ -58,6 +58,7 @@ uint32_t rc_crc32(uint32_t crc, const char *buf, size_t len) // rosetta code
 
 
 int bc_var_stack[1000];
+int bc_is_2nd[1000];
 #endif // BC_TAUT_DEBUG
 
 
@@ -159,7 +160,7 @@ bcl bcp_NewBCLByFlag(bcp p, bcl l, uint8_t flag)
 // then both calculations have to be done
 // so the unate precheck does not improve performance soo much (maybe 5%)
 //#define BCL_TAUTOLOGY_WITH_UNATE_PRECHECK
-int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
+int bcp_IsBCLTautologySub(bcp p, bcl l, int depth, int is_2nd)
 {
   int var_pos;
   bcl f1;
@@ -174,27 +175,35 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   if ( l->cnt == 0 )
     return 0;
   
+  if ( l->cnt == 1 )
+    return bcp_IsTautologyCube(p, bcp_GetBCLCube(p, l, 0));
+
+  
   //assert( bcp_IsPurgeUsefull(p, l) == 0 );
 
   //bcp_PurgeBCL(p, l);
   if ( l->cnt > 1 )
   {
+    
     if ( bcp_is_bcl_partition(p, l) != 0 )
     {
       f1 = bcp_NewBCLByFlag(p, l, 0);
       f2 = bcp_NewBCLByFlag(p, l, 1);
       assert( f1 != NULL );
       assert( f2 != NULL );
+      assert( f1->cnt < l->cnt);
+      assert( f2->cnt < l->cnt);
       memset(l->flags, 0, l->cnt);      // clear all flags which had been set by the partition finder
 
 #ifdef BC_TAUT_DEBUG 
   bc_var_stack[depth] = -2;
+  bc_is_2nd[depth] = is_2nd;
 #endif // BC_TAUT_DEBUG
       
       // if either f1 or f2 is a tautology, then the complete list is tautology
-      if ( bcp_IsBCLTautologySub(p, f1, depth+1) != 0 )
+      if ( bcp_IsBCLTautologySub(p, f1, depth+1, 0) != 0 )
         return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
-      if ( bcp_IsBCLTautologySub(p, f2, depth+1) != 0 )
+      if ( bcp_IsBCLTautologySub(p, f2, depth+1, 1) != 0 )
         return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 1;
 
       return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0; // neither f1 nor f2 are tautology, return 0;
@@ -224,6 +233,7 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   var_pos = bcp_GetBCLMaxBinateSplitVariable(p, l);     // bcp_GetBCLMaxBinateSplitVariableSimple has similar performance
 #ifdef BC_TAUT_DEBUG 
   bc_var_stack[depth] = var_pos;
+  bc_is_2nd[depth] = is_2nd;
 #endif // BC_TAUT_DEBUG
 
 #ifndef BCL_TAUTOLOGY_WITH_UNATE_PRECHECK  
@@ -244,9 +254,9 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   
 #ifdef BC_TAUT_DEBUG 
   for( int i = 0; i <= depth; i++ )
-    printf("%02d ", bc_var_stack[i]);
+    printf("%02d%c ", bc_var_stack[i], bc_is_2nd[i]==0?'l':'r');
   printf("depth %d, size %d, crc %08lx\n", depth, l->cnt,   (unsigned long)rc_crc32(0, (void *)l->list, p->bytes_per_cube_cnt*l->cnt));
-  bcp_ShowBCL(p, l);
+  //bcp_ShowBCL(p, l);
 #endif // BC_TAUT_DEBUG
   
   /*
@@ -261,18 +271,27 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
   f2 = bcp_NewBCLCofacterByVariable(p, l, var_pos, 2);
   assert( f1 != NULL );
   assert( f2 != NULL );
+  
+  
   //assert( bcp_IsPurgeUsefull(p, f1) == 0 );
   //assert( bcp_IsPurgeUsefull(p, f2) == 0 );
 
 #ifdef BC_TAUT_DEBUG 
+/*
+  printf("l f1\n");
+  bcp_Show2BCL(p, l, f1);
+  printf("l f2\n");
+  bcp_Show2BCL(p, l, f2);
+  */
+
   bcp_IsBCLVariableUnate(p, f1, var_pos, 1);
   bcp_IsBCLVariableUnate(p, f2, var_pos, 2);
 #endif // BC_TAUT_DEBUG
 
   
-  if ( bcp_IsBCLTautologySub(p, f1, depth+1) == 0 )
+  if ( bcp_IsBCLTautologySub(p, f1, depth+1, 0) == 0 )
     return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
-  if ( bcp_IsBCLTautologySub(p, f2, depth+1) == 0 )
+  if ( bcp_IsBCLTautologySub(p, f2, depth+1, 1) == 0 )
     return bcp_DeleteBCL(p,  f1), bcp_DeleteBCL(p,  f2), 0;
 
 
@@ -281,5 +300,5 @@ int bcp_IsBCLTautologySub(bcp p, bcl l, int depth)
 
 int bcp_IsBCLTautology(bcp p, bcl l)
 {
-  return bcp_IsBCLTautologySub(p, l, 0);
+  return bcp_IsBCLTautologySub(p, l, 0, 0);
 }

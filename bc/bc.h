@@ -158,6 +158,7 @@ int bcp_ExtendBCL(bcp p, bcl l);
 #define bcp_GetBCLCube(p, l, pos) \
   (bc)(((uint8_t *)((l)->list)) + (pos) * (p)->bytes_per_cube_cnt)
 void bcp_ShowBCL(bcp p, bcl l);
+void bcp_Show2BCL(bcp p, bcl l1, bcl l2);
 int bcp_IsPurgeUsefull(bcp p, bcl l);
 void bcp_PurgeBCL(bcp p, bcl l);               /* purge deleted cubes */
 int bcp_AddBCLCube(bcp p, bcl l); // add empty cube to list l, returns the position of the new cube or -1 in case of error

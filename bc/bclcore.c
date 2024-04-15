@@ -136,6 +136,42 @@ void bcp_ShowBCL(bcp p, bcl l)
   }
 }
 
+void bcp_Show2BCL(bcp p, bcl l1, bcl l2)
+{
+  int i, j, list_cnt = l1->cnt;
+  int v1, v2;
+  bc c1, c2;
+  if ( list_cnt < l2->cnt )
+    list_cnt = l2->cnt;
+  for( i = 0; i < list_cnt; i++ )
+  {
+    printf("%04d %02x %s", i, l1->flags[i], i<l1->cnt?bcp_GetStringFromCube(p, bcp_GetBCLCube(p, l1, i)):"" );
+    printf(" %02x %s ", l2->flags[i], i<l2->cnt?bcp_GetStringFromCube(p, bcp_GetBCLCube(p, l2, i)):"" );
+    if ( i < l1->cnt && i < l2->cnt )
+    {
+      c1 = bcp_GetBCLCube(p, l1, i);
+      c2 = bcp_GetBCLCube(p, l2, i);
+      for( j = 0; j < p->var_cnt; j++ )
+      {
+        v1 = bcp_GetCubeVar(p, c1, j);
+        v2 = bcp_GetCubeVar(p, c2, j);
+        if ( v1 == v2 )
+        {
+          printf(".");
+        }
+        else
+        {
+          printf("x");
+        }
+        
+      }
+    }
+    printf("\n");
+
+  }
+}
+
+
 int bcp_IsPurgeUsefull(bcp p, bcl l)
 {
   int i = 0;
