@@ -163,12 +163,31 @@ int bc_ExecuteDIMACSCNF(const char *dimacscnffilename)
   return 1;
 }
 
+int bc_ExecuteParse(const char *s)
+{
+  bcp p = bcp_New(1);
+  bcx x = bcp_Parse(p, s);
+  bcp_AddVarsFromBCX(p, x);
+  bcp_ShowBCX(p, x);
+  puts("");
+  bcp_BuildVarList(p);
+  
+  coPrint(p->var_map); puts("");
+  coPrint(p->var_list); puts("");
+  
+  bcp_DeleteBCX(p, x);
+  bcp_Delete(p);
+  puts("");
+  return 1;
+}
+
 
 
 void help()
 {
   puts("-json <json file>");
   puts("-dimacscnf <dimacs cnf file>");
+  puts("-parse <boolean expression>");
 }
 
 int main(int argc, char **argv)
@@ -196,6 +215,14 @@ int main(int argc, char **argv)
       if ( (*argv) == NULL )
         return puts("DIMACS CNF filename missing"), 1;
       bc_ExecuteDIMACSCNF(*argv);
+      argv++;
+    }
+    else if ( strcmp(*argv, "-parse") == 0 )
+    {
+      argv++;
+      if ( (*argv) == NULL )
+        return puts("expression missing"), 1;
+      bc_ExecuteParse(*argv);
       argv++;
     }
     else
