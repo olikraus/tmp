@@ -64,6 +64,7 @@ struct bcp_struct
   int x_not;
   int x_and;
   int x_or;
+  int x_var_cnt;         // variable counter for expressions
   
   co var_map;           // map with all variables 
   co var_list;                  // vector with all variables

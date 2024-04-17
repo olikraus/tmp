@@ -337,6 +337,11 @@ void bcp_PrintBCX(bcp p, bcx x)
 
 /*============================================================*/
 
+/*
+  add variable "s" to p->var_map and assign a position number has value to the variable name
+    key: variable name
+    value: position number, starting with 0
+*/
 int bcp_AddVar(bcp p, const char *s)
 {
   if ( p->var_map == NULL )
@@ -347,7 +352,7 @@ int bcp_AddVar(bcp p, const char *s)
   }  
   if ( coMapExists(p->var_map, s) )
     return 1;
-  return coMapAdd(p->var_map, s, NULL);
+  return coMapAdd(p->var_map, s, coNewDbl(p->x_var_cnt++));
 }
 
 int bcp_AddVarsFromBCX(bcp p, bcx x)
@@ -361,9 +366,18 @@ int bcp_AddVarsFromBCX(bcp p, bcx x)
   return bcp_AddVarsFromBCX(p, x->next);
 }
 
-/* build var_list from var_map */
+/* 
+  build var_list from var_map 
+  The value from var_map is the index position for var_list.
+  This means:
+    for a given string s
+      var_list[var_map[s]] == s
+    and for a given index:
+      var_map[var_list[index]] == index
+*/
 int bcp_BuildVarList(bcp p)
 {
+  int i;
   coMapIterator iter;
   if ( p->var_list == NULL )
   {
@@ -372,13 +386,19 @@ int bcp_BuildVarList(bcp p)
       return 0;
   }
   coVectorClear(p->var_list);
+  for( i = 0; i < p->x_var_cnt; i++ )
+  {
+    if ( coVectorAdd(p->var_list, NULL) < 0 )
+      return 0;
+  }
+  
 
   if ( coMapLoopFirst(&iter, p->var_map) )
   {
     do 
     {
-      if ( coVectorAdd( p->var_list, coNewStr(0, coMapLoopKey(&iter)) ) < 0 )
-        return 0;
+      i = coDblGet(coMapLoopValue(&iter));
+      coVectorSet( p->var_list, i, coNewStr(0, coMapLoopKey(&iter)) );
     } while( coMapLoopNext(&iter) );
   }
   

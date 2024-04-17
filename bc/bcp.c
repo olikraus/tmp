@@ -47,6 +47,7 @@ bcp bcp_New(size_t var_cnt)
       p->x_not = '!';
       p->x_or = '|';
       p->x_and = '&';
+      p->x_var_cnt = 0;
     
       p->var_map = NULL;
       p->var_list = NULL;
