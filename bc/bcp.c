@@ -29,78 +29,114 @@ int bcp_GetVarCntFromString(const char *s)
   return cnt; // we should never reach this statement
 }
 
+static void bcp_var_cnt_clear(bcp p)
+{
+  bcp_DeleteBCL(p, p->global_cube_list);
+  p->global_cube_list = NULL;
+  bcp_DeleteBCL(p, p->stack_cube_list);
+  p->stack_cube_list = NULL;
+  free(p->cube_to_str);
+  p->cube_to_str = NULL;
+}
+
+
+static int bcp_var_cnt_init(bcp p, size_t var_cnt)
+{
+  p->var_cnt = var_cnt;
+  p->vars_per_blk_cnt = sizeof(__m128i)*4;
+  p->blk_cnt = (var_cnt + p->vars_per_blk_cnt-1)/p->vars_per_blk_cnt;
+  p->bytes_per_cube_cnt = p->blk_cnt*sizeof(__m128i);
+  //printf("p->bytes_per_cube_cnt=%d\n", p->bytes_per_cube_cnt);
+  p->stack_depth = 0;
+  p->cube_to_str = (char *)malloc(p->var_cnt+1);
+  if ( p->cube_to_str != NULL )
+  {
+    p->stack_cube_list = bcp_NewBCL(p);
+    if ( p->stack_cube_list != NULL )
+    {
+      p->global_cube_list = bcp_NewBCL(p);
+      if ( p->global_cube_list != NULL )
+      {
+        int i;
+                    /*
+                            0..3:	constant cubes for all illegal, all zero, all one and all don't care
+                            4..7:	uint8_t counters for zeros in a list
+                            8..11:	uint8_t counters for ones in a list
+                            4..11: uint16_t counters
+                            12..19: uint16_t counters
+                    */
+        for( i = 0; i < 4+8+8; i++ )
+          bcp_AddBCLCube(p, p->global_cube_list);
+        if ( p->global_cube_list->cnt >= 4 )
+        {
+          memset(bcp_GetBCLCube(p, p->global_cube_list, 0), 0, p->bytes_per_cube_cnt);  // all vars are illegal
+          memset(bcp_GetBCLCube(p, p->global_cube_list, 1), 0x55, p->bytes_per_cube_cnt);  // all vars are zero
+          memset(bcp_GetBCLCube(p, p->global_cube_list, 2), 0xaa, p->bytes_per_cube_cnt);  // all vars are one
+          memset(bcp_GetBCLCube(p, p->global_cube_list, 3), 0xff, p->bytes_per_cube_cnt);  // all vars are don't care
+          return 1;
+        }
+        bcp_DeleteBCL(p, p->global_cube_list);
+      }
+      bcp_DeleteBCL(p, p->stack_cube_list);
+    }
+    free(p->cube_to_str);
+  }
+  return 0;
+}
+
 
 bcp bcp_New(size_t var_cnt)
 {
   bcp p = (bcp)malloc(sizeof(struct bcp_struct));
   if ( p != NULL )
   {
-      p->var_cnt = var_cnt;
-      p->vars_per_blk_cnt = sizeof(__m128i)*4;
-      p->blk_cnt = (var_cnt + p->vars_per_blk_cnt-1)/p->vars_per_blk_cnt;
-      p->bytes_per_cube_cnt = p->blk_cnt*sizeof(__m128i);
-      //printf("p->bytes_per_cube_cnt=%d\n", p->bytes_per_cube_cnt);
-      p->stack_depth = 0;
-      p->cube_to_str = (char *)malloc(p->var_cnt+1);
-    
+      p->var_map = NULL;
+      p->var_list = NULL;
+
       p->x_end = '.';
       p->x_not = '!';
       p->x_or = '|';
       p->x_and = '&';
       p->x_var_cnt = 0;
     
-      p->var_map = NULL;
-      p->var_list = NULL;
-    
-      if ( p->cube_to_str != NULL )
+      if ( bcp_var_cnt_init(p, var_cnt) != 0 )
       {
-        p->stack_cube_list = bcp_NewBCL(p);
-        if ( p->stack_cube_list != NULL )
-        {
-          p->global_cube_list = bcp_NewBCL(p);
-          if ( p->global_cube_list != NULL )
-          {
-            int i;
-			/*
-				0..3:	constant cubes for all illegal, all zero, all one and all don't care
-				4..7:	uint8_t counters for zeros in a list
-				8..11:	uint8_t counters for ones in a list
-                                4..11: uint16_t counters
-                                12..19: uint16_t counters
-			*/
-            for( i = 0; i < 4+8+8; i++ )
-              bcp_AddBCLCube(p, p->global_cube_list);
-            if ( p->global_cube_list->cnt >= 4 )
-            {
-              memset(bcp_GetBCLCube(p, p->global_cube_list, 0), 0, p->bytes_per_cube_cnt);  // all vars are illegal
-              memset(bcp_GetBCLCube(p, p->global_cube_list, 1), 0x55, p->bytes_per_cube_cnt);  // all vars are zero
-              memset(bcp_GetBCLCube(p, p->global_cube_list, 2), 0xaa, p->bytes_per_cube_cnt);  // all vars are one
-              memset(bcp_GetBCLCube(p, p->global_cube_list, 3), 0xff, p->bytes_per_cube_cnt);  // all vars are don't care
-              return p;
-            }
-            bcp_DeleteBCL(p, p->global_cube_list);
-          }
-          bcp_DeleteBCL(p, p->stack_cube_list);
-        }
-        free(p->cube_to_str);
+        return p;
       }
+      
       free(p);
   }
   return NULL;
+}
+
+/*      
+  Update p->var_cnt from p->x_var_cnt
+  Idea is this:
+    1. allocate a bcp with dummy value 1
+    2. parse expression and update p->x_var_cnt
+    3. Call this function to change p->var_cnt to p->x_var_cnt
+*/
+int bcp_UpdateFromX(bcp p)
+{
+  assert( p->var_cnt <= 1 );
+  bcp_var_cnt_clear(p);
+  if ( bcp_var_cnt_init(p, p->x_var_cnt) != 0 )
+  {
+    return 1;
+  }
+  return 0;
 }
 
 void bcp_Delete(bcp p)
 {
   if ( p == NULL )
     return ;
-  bcp_DeleteBCL(p, p->global_cube_list);
-  bcp_DeleteBCL(p, p->stack_cube_list);
+  bcp_var_cnt_clear(p);
+  
   if ( p->var_list != NULL )
     coDelete(p->var_list);
   if ( p->var_map != NULL )
-    coDelete(p->var_map);
-  
-  free(p->cube_to_str);
+    coDelete(p->var_map);  
   free(p);
 }
 

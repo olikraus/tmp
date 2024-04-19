@@ -174,6 +174,9 @@ int bc_ExecuteParse(const char *s)
   
   coPrint(p->var_map); puts("");
   coPrint(p->var_list); puts("");
+
+  assert( bcp_UpdateFromX(p) != 0 );
+
   
   bcp_DeleteBCX(p, x);
   bcp_Delete(p);
@@ -185,6 +188,7 @@ int bc_ExecuteParse(const char *s)
 
 void help()
 {
+  puts("-test");
   puts("-json <json file>");
   puts("-dimacscnf <dimacs cnf file>");
   puts("-parse <boolean expression>");
@@ -201,7 +205,18 @@ int main(int argc, char **argv)
   {
     if ( (*argv) == NULL )
       break;
-    if ( strcmp(*argv, "-json") == 0 )
+    if ( strcmp(*argv, "-h") == 0 )
+    {
+      help();
+      argv++;
+      exit(1);
+    }
+    else if ( strcmp(*argv, "-test") == 0 )
+    {
+      internalTest(7);
+      argv++;
+    }
+    else if ( strcmp(*argv, "-json") == 0 )
     {
       argv++;
       if ( (*argv) == NULL )
