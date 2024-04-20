@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 
 /*============================================================*/
@@ -266,74 +267,6 @@ bcx bcp_ParseOR(bcp p, const char **s)
   return binop;
 }
 
-/*============================================================*/
-
-void bcp_ShowBCX(bcp p, bcx x)
-{
-  int is_not;
-  if ( x == NULL )
-    return;
-  is_not = x->is_not;
-  if ( is_not )
-  {
-    printf("%c(", p->x_not);
-  }
-  switch(x->type)
-  {
-    case BCX_TYPE_ID:
-      printf("%s", x->identifier);
-      break;
-    case BCX_TYPE_NUM:
-      printf("%d", x->val);
-      break;
-    case BCX_TYPE_AND:
-      x = x->down;
-      printf("(");
-      while( x != NULL )
-      {
-        bcp_ShowBCX(p, x);
-        if ( x->next == NULL )
-          break;
-        printf("%c", p->x_and);
-        x = x->next;
-      }
-      printf(")");
-      break;
-    case BCX_TYPE_OR:
-      x = x->down;
-      printf("(");
-      while( x != NULL )
-      {
-        bcp_ShowBCX(p, x);
-        if ( x->next == NULL )
-          break;
-        printf("%c", p->x_or);
-        x = x->next;
-      }
-      printf(")");
-      break;
-    case BCX_TYPE_BCL:
-      printf("BCL");
-      break;
-    default:
-      break;
-  }
-  if ( is_not )
-  {
-    printf(")");
-  }
-}
-
-/*============================================================*/
-
-void bcp_PrintBCX(bcp p, bcx x)
-{
-  if ( x == NULL )
-    return;
-  printf("%p: t=%d id=%s d=%p n=%p\n", x, x->type, x->identifier,  x->down, x->next);
-  bcp_PrintBCX(p, x->down);
-  bcp_PrintBCX(p, x->next);
-}
 
 /*============================================================*/
 
@@ -415,4 +348,111 @@ bcx bcp_Parse(bcp p, const char *s)
   return bcp_ParseOR(p, t);
 }
 
+/*============================================================*/
+
+void bcp_ShowBCX(bcp p, bcx x)
+{
+  int is_not;
+  if ( x == NULL )
+    return;
+  is_not = x->is_not;
+  if ( is_not )
+  {
+    printf("%c(", p->x_not);
+  }
+  switch(x->type)
+  {
+    case BCX_TYPE_ID:
+      printf("%s", x->identifier);
+      break;
+    case BCX_TYPE_NUM:
+      printf("%d", x->val);
+      break;
+    case BCX_TYPE_AND:
+      x = x->down;
+      printf("(");
+      while( x != NULL )
+      {
+        bcp_ShowBCX(p, x);
+        if ( x->next == NULL )
+          break;
+        printf("%c", p->x_and);
+        x = x->next;
+      }
+      printf(")");
+      break;
+    case BCX_TYPE_OR:
+      x = x->down;
+      printf("(");
+      while( x != NULL )
+      {
+        bcp_ShowBCX(p, x);
+        if ( x->next == NULL )
+          break;
+        printf("%c", p->x_or);
+        x = x->next;
+      }
+      printf(")");
+      break;
+    case BCX_TYPE_BCL:
+      printf("BCL");
+      break;
+    default:
+      break;
+  }
+  if ( is_not )
+  {
+    printf(")");
+  }
+}
+
+/*============================================================*/
+
+void bcp_PrintBCX(bcp p, bcx x)
+{
+  if ( x == NULL )
+    return;
+  printf("%p: t=%d id=%s d=%p n=%p\n", x, x->type, x->identifier,  x->down, x->next);
+  bcp_PrintBCX(p, x->down);
+  bcp_PrintBCX(p, x->next);
+}
+
+bcl bcp_NewBCLById(bcp p, int is_not, const char *identifier)
+{
+  bcl l;
+  int cube_pos;
+  cco var_pos_co;
+  unsigned var_pos;
+  
+  l = bcp_NewBCL(p);
+  if ( l != NULL )
+  {
+    cube_pos = bcp_AddBCLCube(p, l);
+    if ( cube_pos >= 0 )
+    {
+      var_pos_co = coMapGet(p->var_map, identifier);
+      if ( var_pos_co != NULL )
+      {
+        assert( coIsDbl(var_pos_co) );
+        var_pos = (int)coDblGet(var_pos_co);
+        assert( var_pos < p->var_cnt );
+        bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, is_not?1:2);
+      }
+    }
+    bcp_DeleteBCL(p, l);
+  }
+  return NULL; // error
+}
+
+bcl bcp_GetBCLByBCX(bcp p, bcx x)
+{
+  bcl l;
+  switch(x->type)
+  {
+    case BCX_TYPE_ID:
+      assert( x->down == NULL );
+      l = bcp_NewBCLById(p, x->is_not, x->identifier);
+      break;
+  }
+}
 

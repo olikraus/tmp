@@ -110,7 +110,7 @@ bcp bcp_New(size_t var_cnt)
 }
 
 /*      
-  Update p->var_cnt from p->x_var_cnt
+  Update p->var_cnt from p->x_var_cnt after expression analysis
   Idea is this:
     1. allocate a bcp with dummy value 1
     2. parse expression and update p->x_var_cnt
