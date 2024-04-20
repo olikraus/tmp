@@ -51,6 +51,26 @@ bcl bcp_NewBCLByBCL(bcp p, bcl l)
   return NULL;
 }
 
+/*
+  create a new BCL and add one cube from the global cube list into it.
+  This can be used to create a tautology list:
+  bcp_NewBCLWithCube(p, 3)
+*/
+bcl bcp_NewBCLWithCube(bcp p, int global_cube_pos)
+{
+  bcl l = bcp_NewBCL(p);
+  if ( l != NULL )
+  {
+    if ( bcp_AddBCLCubeByCube(p, l, bcp_GetGlobalCube(p, global_cube_pos)) >= 0 )
+    {
+      return l;
+    }
+    bcp_DeleteBCL(p, l);
+  }
+  return NULL;
+}
+
+
 /* let a be a copy of b: copy content from bcl b into bcl a */
 int bcp_CopyBCL(bcp p, bcl a, bcl b)
 {
@@ -250,6 +270,7 @@ int bcp_AddBCLCubeByCube(bcp p, bcl l, bc c)
   l->flags[l->cnt-1] = 0;
   return l->cnt-1;
 }
+
 
 /*
   Adds the cubes from b to list a.

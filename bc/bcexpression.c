@@ -437,6 +437,7 @@ bcl bcp_NewBCLById(bcp p, int is_not, const char *identifier)
         var_pos = (int)coDblGet(var_pos_co);
         assert( var_pos < p->var_cnt );
         bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, is_not?1:2);
+        return l;
       }
     }
     bcp_DeleteBCL(p, l);
@@ -444,15 +445,64 @@ bcl bcp_NewBCLById(bcp p, int is_not, const char *identifier)
   return NULL; // error
 }
 
-bcl bcp_GetBCLByBCX(bcp p, bcx x)
+bcl bcp_NewBCLByBCX(bcp p, bcx x)
 {
   bcl l;
+  int is_not = x->is_not;
   switch(x->type)
   {
     case BCX_TYPE_ID:
       assert( x->down == NULL );
-      l = bcp_NewBCLById(p, x->is_not, x->identifier);
-      break;
+      return bcp_NewBCLById(p, is_not, x->identifier);
+    case BCX_TYPE_NUM:
+      assert( x->down == NULL );
+      if ( (is_not == 0 && x->val == 0) ||  (is_not != 0 && x->val != 0) )
+          return bcp_NewBCL(p); // empty list
+      return bcp_NewBCLWithCube(p, 3);  // tautology list
+    case BCX_TYPE_AND:
+      x = x->down;
+      l = bcp_NewBCLByBCX(p, x);
+      x = x->next;
+      while( x != NULL )
+      {
+        bcl ll = bcp_NewBCLByBCX(p, x);
+        assert( ll != NULL );
+        bcp_IntersectionBCL(p, l, ll);
+        bcp_DeleteBCL(p, ll);
+        x = x->next;
+      }
+      if ( is_not )
+      {
+        bcl ll = bcp_NewBCLComplement(p, l);
+        bcp_DeleteBCL(p, l);
+        return ll;
+      }
+      return l;
+    case BCX_TYPE_OR:
+      x = x->down;
+      l = bcp_NewBCLByBCX(p, x);
+      x = x->next;
+      while( x != NULL )
+      {
+        bcl ll = bcp_NewBCLByBCX(p, x);
+        assert( ll != NULL );
+        bcp_AddBCLCubesByBCL(p, l, ll);
+        bcp_DeleteBCL(p, ll);
+        bcp_DoBCLSingleCubeContainment(p, l);
+        x = x->next;
+      }
+      if ( is_not )
+      {
+        bcl ll = bcp_NewBCLComplement(p, l);
+        bcp_DeleteBCL(p, l);
+        return ll;
+      }
+      return l;
+    default:
+      printf("illegal type %d\n", x->type);
+      return NULL;
   }
+  assert(0);
+  return NULL;
 }
 

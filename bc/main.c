@@ -165,8 +165,11 @@ int bc_ExecuteDIMACSCNF(const char *dimacscnffilename)
 
 int bc_ExecuteParse(const char *s)
 {
+  bcl l;
   bcp p = bcp_New(1);
   bcx x = bcp_Parse(p, s);
+  
+  
   bcp_AddVarsFromBCX(p, x);
   bcp_ShowBCX(p, x);
   puts("");
@@ -177,8 +180,13 @@ int bc_ExecuteParse(const char *s)
 
   assert( bcp_UpdateFromX(p) != 0 );
 
+  l = bcp_NewBCLByBCX(p, x);
+  assert( l != NULL );
+
+  bcp_ShowBCL(p, l);
   
   bcp_DeleteBCX(p, x);
+  bcp_DeleteBCL(p, l);
   bcp_Delete(p);
   puts("");
   return 1;
