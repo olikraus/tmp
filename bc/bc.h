@@ -267,6 +267,8 @@ void bcp_PrintBCX(bcp p, bcx x);
 
 bcl bcp_NewBCLByBCX(bcp p, bcx x);
 
+char *bcp_GetExpressionBCL(bcp p, bcl l);
+
 
 /* bcjson.c */
 

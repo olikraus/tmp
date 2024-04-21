@@ -168,11 +168,10 @@ int bc_ExecuteParse(const char *s)
   bcl l;
   bcp p = bcp_New(0);
   bcx x = bcp_Parse(p, s);
+  char *expr;
     
   bcp_ShowBCX(p, x);
   puts("");
-  
-  // bcp_BuildVarList(p); // required only for mapping from cube pos to name 
   
   coPrint(p->var_map); puts("");
   coPrint(p->var_list); puts("");
@@ -183,7 +182,11 @@ int bc_ExecuteParse(const char *s)
   assert( l != NULL );
 
   bcp_ShowBCL(p, l);
-  
+ 
+  expr = bcp_GetExpressionBCL(p, l);
+  puts(expr);
+
+  free(expr);
   bcp_DeleteBCX(p, x);
   bcp_DeleteBCL(p, l);
   bcp_Delete(p);

@@ -316,6 +316,8 @@ int bcp_AddVarsFromBCX(bcp p, bcx x)
   p->var_list is only required, if we want to convert back the BCL to a human 
   readable expressions
 
+  This function is called by "char *bcp_GetExpressionBCL(bcp p, bcl l)", so there should be no need to call this fn directly
+
 */
 int bcp_BuildVarList(bcp p)
 {
@@ -598,12 +600,16 @@ bcl bcp_NewBCLByBCX(bcp p, bcx x)
   convert BCL to a textual expression
 */
 
+#define STR_CHAR_EXTEND 32
+
 int str_extend(char **s, size_t *max, size_t extend)
 {
   void *p;
   if ( *max == 0 || *s == NULL )
   {
     *s = (char *)malloc(extend);
+    if ( *s == NULL )
+      return 0;
     *max = extend;
     return 1;
   }
@@ -619,7 +625,7 @@ int str_extend_and_append(char **s, size_t *len, size_t *max, const char *t)
 {
   size_t tl = strlen(t);
   if ( *len+tl+1 > *max )
-    if ( str_extend(s, max, *len + tl +1 - *max + 256) == 0 )
+    if ( str_extend(s, max, *len + tl +1 - *max + STR_CHAR_EXTEND) == 0 )
       return 0;
     
   strcpy(*s+*len, t);
@@ -684,9 +690,20 @@ int str_extend_and_append_list(char **s, size_t *len, size_t *max, bcp p, bcl l)
 
 char *bcp_GetExpressionBCL(bcp p, bcl l)
 {
-  int i;
-  for( i = 0; i < l->cnt; i++ )
-  {
-  }
-  return NULL;
+  size_t len, max;
+  char *s;
+  
+  len = 0; 
+  max = 0;
+  s = NULL;
+  
+  if ( p->var_list == NULL )
+    bcp_BuildVarList(p);
+  
+  if ( str_extend(&s, &max, STR_CHAR_EXTEND) == 0 )
+    return NULL;
+  if ( str_extend_and_append_list(&s, &len, &max, p, l) == 0 )
+    return free(s), NULL;
+  
+  return s;
 }
