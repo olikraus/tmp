@@ -63,6 +63,8 @@ const char *bcp_GetStringFromCube(bcp p, bc c)
   return s;
 }
 
+
+
 /*
   use string "s" to fill the content of cube "c"
     '0' --> bit value 01

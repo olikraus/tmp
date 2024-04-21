@@ -441,7 +441,7 @@ void bcp_ShowBCX(bcp p, bcx x)
   is_not = x->is_not;
   if ( is_not )
   {
-    printf("%c(", p->x_not);
+    printf("%c", p->x_not);
   }
   switch(x->type)
   {
@@ -482,10 +482,6 @@ void bcp_ShowBCX(bcp p, bcx x)
       break;
     default:
       break;
-  }
-  if ( is_not )
-  {
-    printf(")");
   }
 }
 
@@ -597,3 +593,100 @@ bcl bcp_NewBCLByBCX(bcp p, bcx x)
   return NULL;
 }
 
+/*============================================================*/
+/*
+  convert BCL to a textual expression
+*/
+
+int str_extend(char **s, size_t *max, size_t extend)
+{
+  void *p;
+  if ( *max == 0 || *s == NULL )
+  {
+    *s = (char *)malloc(extend);
+    *max = extend;
+    return 1;
+  }
+  p = realloc(*s, *max + extend);
+  if ( p == NULL )
+    return 0;
+  *s = (char *)p;
+  *max += extend;
+  return 1;
+}
+
+int str_extend_and_append(char **s, size_t *len, size_t *max, const char *t)
+{
+  size_t tl = strlen(t);
+  if ( *len+tl+1 > *max )
+    if ( str_extend(s, max, *len + tl +1 - *max + 256) == 0 )
+      return 0;
+    
+  strcpy(*s+*len, t);
+  *len += tl;
+  return 1;
+}
+
+int str_extend_and_append_cube(char **s, size_t *len, size_t *max, bcp p, bc c)
+{
+  int i, var_cnt = p->var_cnt;
+  int value;
+  char not_str[2];
+  char and_str[2];
+  int is_first = 1;
+  
+  not_str[0] = p->x_not;
+  not_str[1] = '\0';
+  and_str[0] = p->x_and;
+  and_str[1] = '\0';  
+  
+  for( i = 0; i < var_cnt; i++ )
+  {
+    value = bcp_GetCubeVar(p, c, i);
+    if ( value == 1 || value == 2 )
+    {
+      if ( is_first )
+        is_first = 0;
+      else
+        str_extend_and_append(s, len, max, and_str);
+        
+      if ( value == 1 )
+        str_extend_and_append(s, len, max, not_str);
+      
+      str_extend_and_append(s, len, max, coStrGet(coVectorGet( p->var_list, i )));
+    }
+  }
+  if ( is_first )
+    str_extend_and_append(s, len, max, "1");    
+  return 1;
+}
+
+int str_extend_and_append_list(char **s, size_t *len, size_t *max, bcp p, bcl l)
+{
+  int i;
+  int is_first = 1;
+  char or_str[2];
+  or_str[0] = p->x_or;
+  or_str[1] = '\0';
+  
+  for( i = 0; i < l->cnt; i++ )
+  {
+      if ( is_first )
+        is_first = 0;
+      else
+        str_extend_and_append(s, len, max, or_str);
+        
+    str_extend_and_append_cube(s, len, max, p,bcp_GetBCLCube(p, l, i));
+  }
+  return 1;
+}
+
+
+char *bcp_GetExpressionBCL(bcp p, bcl l)
+{
+  int i;
+  for( i = 0; i < l->cnt; i++ )
+  {
+  }
+  return NULL;
+}

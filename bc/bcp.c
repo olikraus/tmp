@@ -48,7 +48,7 @@ static int bcp_var_cnt_init(bcp p, size_t var_cnt)
   p->bytes_per_cube_cnt = p->blk_cnt*sizeof(__m128i);
   //printf("p->bytes_per_cube_cnt=%d\n", p->bytes_per_cube_cnt);
   p->stack_depth = 0;
-  p->cube_to_str = (char *)malloc(p->var_cnt+1);
+  p->cube_to_str = (char *)malloc(p->var_cnt+1); 
   if ( p->cube_to_str != NULL )
   {
     p->stack_cube_list = bcp_NewBCL(p);

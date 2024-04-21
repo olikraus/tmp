@@ -166,13 +166,13 @@ int bc_ExecuteDIMACSCNF(const char *dimacscnffilename)
 int bc_ExecuteParse(const char *s)
 {
   bcl l;
-  bcp p = bcp_New(1);
+  bcp p = bcp_New(0);
   bcx x = bcp_Parse(p, s);
     
   bcp_ShowBCX(p, x);
   puts("");
   
-  bcp_BuildVarList(p);
+  // bcp_BuildVarList(p); // required only for mapping from cube pos to name 
   
   coPrint(p->var_map); puts("");
   coPrint(p->var_list); puts("");
