@@ -112,10 +112,8 @@ int main3(int argc, char **argv)
 int main4()
 {
   bcp p = bcp_New(1);
-  bcx x = bcp_Parse(p, "a&b|c&b");
-  bcp_AddVarsFromBCX(p, x);
+  bcx x = bcp_Parse(p, "a&b|c&b", 1);
   bcp_ShowBCX(p, x);
-  bcp_BuildVarList(p);
   
   
   //bcp_PrintBCX(p, x);
@@ -167,7 +165,7 @@ int bc_ExecuteParse(const char *s)
 {
   bcl l;
   bcp p = bcp_New(0);
-  bcx x = bcp_Parse(p, s);
+  bcx x = bcp_Parse(p, s, 1);
   char *expr;
     
   bcp_ShowBCX(p, x);
@@ -224,6 +222,7 @@ int main(int argc, char **argv)
     else if ( strcmp(*argv, "-test") == 0 )
     {
       internalTest(7);
+      expressionTest();
       argv++;
     }
     else if ( strcmp(*argv, "-json") == 0 )

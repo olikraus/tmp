@@ -371,3 +371,63 @@ void minimizeTest(int cnt)
   bcp_Delete(p);  
   
 }
+
+static void expression_test_sub(const char *cubes, const char *expression, int is_not_propagation)
+{
+  bcp p;
+  bcx x;
+  bcl lx, lc;
+  int equal;
+  char *expr2;
+
+  printf("Parse test '%s'\n", expression);
+  p = bcp_New(0);
+  x = bcp_Parse(p, expression, is_not_propagation);
+  assert(x != NULL);
+  bcp_UpdateFromBCX(p);
+  
+  assert( bcp_GetVarCntFromString(cubes) == p->var_cnt );  // cube size must be equal to the number of variables in the expression
+
+  lx = bcp_NewBCLByBCX(p, x);
+  bcp_DeleteBCX(p, x);          // abstract syntax tree is not required any more
+  assert( lx != NULL );
+  lc = bcp_NewBCLByString(p, cubes);
+  assert( lc != NULL );
+
+  printf("Equal test 1 '%s'\n", expression);
+  equal = bcp_IsBCLEqual(p, lx, lc);                // checks whether the two lists are equal
+  assert( equal != 0 );
+  expr2 = bcp_GetExpressionBCL(p, lx);       // convert "lx" back to a human readable expression, return value must be free'd if not NULL
+  assert( expr2 != NULL );
+  bcp_DeleteBCL(p, lx);
+  printf("Back conversion '%s' --> '%s'\n", expression, expr2);
+  x = bcp_Parse(p, expr2, is_not_propagation);  // parse again
+  assert( x != NULL );
+  assert( p->var_cnt == p->x_var_cnt);          // the variable count must not change
+
+  printf("Equal test 2 '%s'\n", expr2);
+  free( expr2 );
+  lx = bcp_NewBCLByBCX(p, x);   // again get the bcl from it
+  assert( lx != NULL );
+  bcp_DeleteBCX(p, x);          // abstract syntax tree is not required any more
+  equal = bcp_IsBCLEqual(p, lx, lc);                // checks whether the two lists are equal
+  assert( equal != 0 );
+
+  bcp_DeleteBCL(p, lx);
+
+  bcp_DeleteBCL(p, lc);
+  bcp_Delete(p);
+}
+
+void expressionTest(void)
+{
+  expression_test_sub("1", "a", 1);
+  expression_test_sub("11", "a&b", 1);
+  expression_test_sub("00", "-(a|b)", 0);
+  expression_test_sub("00", "-(a|b)", 1);
+  expression_test_sub("--1\n1--\n-1-\n", "a|b|c", 1);
+  expression_test_sub("--0\n1--\n-1-\n", "a|b|-c", 1);
+  expression_test_sub("--11\n1--1\n-1-1\n", "(a|b|c)&d", 1);
+  expression_test_sub("--11\n1--1\n-1-1\n", "-(-a&-b&-c)&d", 1);
+  expression_test_sub("--11\n1--1\n-1-1\n", "-(-a&-b&-c)&d", 0);
+}

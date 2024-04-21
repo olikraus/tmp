@@ -255,19 +255,18 @@ int bcp_get_value(bcp p, const char **s);
 bcx bcp_NewBCX(bcp p);
 void bcp_DeleteBCX(bcp p, bcx x);
 
-int bcp_AddVar(bcp p, const char *s);
-int bcp_AddVarsFromBCX(bcp p, bcx x);
-int bcp_BuildVarList(bcp p);
+//int bcp_AddVar(bcp p, const char *s);
+//int bcp_AddVarsFromBCX(bcp p, bcx x);
+//int bcp_BuildVarList(bcp p);
 
-bcx bcp_Parse(bcp p, const char *s);
+bcx bcp_Parse(bcp p, const char *s, int is_not_propagation);
 
 void bcp_ShowBCX(bcp p, bcx x);
-
 void bcp_PrintBCX(bcp p, bcx x);
 
 bcl bcp_NewBCLByBCX(bcp p, bcx x);
 
-char *bcp_GetExpressionBCL(bcp p, bcl l);
+char *bcp_GetExpressionBCL(bcp p, bcl l);       // convert "l" to a human readable expression, return value must be free'd if not NULL
 
 
 /* bcjson.c */
@@ -282,6 +281,7 @@ bcl bcp_NewBCLWithRandomTautology(bcp p, int size, int dc2one_conversion_cnt);
 void internalTest(int var_cnt);
 void speedTest(int var_cnt);
 void minimizeTest(int cnt);
+void expressionTest(void);
 
 
 

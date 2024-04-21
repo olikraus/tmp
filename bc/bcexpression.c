@@ -410,8 +410,12 @@ static void bcp_PropagateNotBCX(bcp p, bcx x)
     3. make a call to bcp_UpdateFromBCX(p) so that the bcp matches the variable cnt from all the expressions
     4. with all textual expressions: parse the expresion, get the BCL and delete the expression
 
+  is_not_propagation:
+    0: do not apply de morgan rules to the expression try
+    1: apply de morgan rules to the expression tree and move all not to the leafs of the tree (strongly recommended!!!)
+
 */
-bcx bcp_Parse(bcp p, const char *s)
+bcx bcp_Parse(bcp p, const char *s, int is_not_propagation)
 {
   bcx x;
   // prepare the expression, so that we can start with the parsing
@@ -654,16 +658,20 @@ int str_extend_and_append_cube(char **s, size_t *len, size_t *max, bcp p, bc c)
       if ( is_first )
         is_first = 0;
       else
-        str_extend_and_append(s, len, max, and_str);
+        if ( str_extend_and_append(s, len, max, and_str) == 0 )
+          return 0;
         
       if ( value == 1 )
-        str_extend_and_append(s, len, max, not_str);
+        if ( str_extend_and_append(s, len, max, not_str) == 0 )
+          return 0;
       
-      str_extend_and_append(s, len, max, coStrGet(coVectorGet( p->var_list, i )));
+      if ( str_extend_and_append(s, len, max, coStrGet(coVectorGet( p->var_list, i ))) == 0 )
+        return 0;
     }
   }
   if ( is_first )
-    str_extend_and_append(s, len, max, "1");    
+    if ( str_extend_and_append(s, len, max, "1") == 0 )
+      return 0;
   return 1;
 }
 
@@ -680,9 +688,11 @@ int str_extend_and_append_list(char **s, size_t *len, size_t *max, bcp p, bcl l)
       if ( is_first )
         is_first = 0;
       else
-        str_extend_and_append(s, len, max, or_str);
+        if ( str_extend_and_append(s, len, max, or_str) == 0 )
+          return 0;
         
-    str_extend_and_append_cube(s, len, max, p,bcp_GetBCLCube(p, l, i));
+    if ( str_extend_and_append_cube(s, len, max, p,bcp_GetBCLCube(p, l, i)) == 0 )
+      return 0;
   }
   return 1;
 }
