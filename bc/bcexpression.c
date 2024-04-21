@@ -165,8 +165,12 @@ bcx bcp_ParseAtom(bcp p, const char **s)
 {
   static char msg[32];
   bcx x;
-  
-  if ( **s == '(' )
+
+  if ( **s == '\0' )    // this is reached if the string is full empty
+  {
+    return bcp_NewBCXValue(p, 0);       // return 0 value if the string is (unexpectedly) empty
+  }
+  else if ( **s == '(' )
   {
     (*s)++;
     bcp_skip_space(p, s);
@@ -301,17 +305,25 @@ int bcp_AddVarsFromBCX(bcp p, bcx x)
 
 /* 
   build var_list from var_map 
+
   The value from var_map is the index position for var_list.
   This means:
     for a given string s
       var_list[var_map[s]] == s
     and for a given index:
       var_map[var_list[index]] == index
+
+  p->var_list is only required, if we want to convert back the BCL to a human 
+  readable expressions
+
 */
 int bcp_BuildVarList(bcp p)
 {
   int i;
   coMapIterator iter;
+  if ( p->var_map == NULL ) // check if there are any variables 
+    return 1;   // all ok, if there are no variables
+  
   if ( p->var_list == NULL )
   {
     p->var_list = coNewVector(CO_FREE_VALS);
@@ -340,12 +352,83 @@ int bcp_BuildVarList(bcp p)
 
 /*============================================================*/
 
+/*
+  Apply deMorgan low, so that the is_not flag is only set to any leaf node
+  This will avoid BCL complement calculation in bcp_NewBCLByBCX()
+  This function will change the expression argument "x"
+*/
+static void bcp_PropagateNotBCX(bcp p, bcx x)
+{
+  if ( x == NULL )
+    return;
 
+  if ( x->is_not )
+  {
+    bcx xx = x->down;
+    // apply de morgan if required
+    switch(x->type)
+    {
+      case BCX_TYPE_AND:
+        x->type = BCX_TYPE_OR;
+        x->is_not = 0;
+        while( xx != NULL )
+        {
+          xx->is_not = !xx->is_not;       // invert the not flag of the child
+          xx = xx->next;
+        }
+        break;
+      case BCX_TYPE_OR:
+        x->type = BCX_TYPE_AND;
+        x->is_not = 0;
+        while( xx != NULL )
+        {
+          xx->is_not = !xx->is_not;       // invert the not flag of the child
+          xx = xx->next;
+        }
+        break;        
+    }
+  }  
+  
+  bcp_PropagateNotBCX(p, x->down);
+  bcp_PropagateNotBCX(p, x->next);
+  
+}
+
+/*============================================================*/
+
+/*
+  Parse a given textual expression and return the abtract syntax tree
+  of that expression (bcx object).
+  The return value must be free'd with  "bcp_DeleteBCX()"
+
+  Overall procedure
+    1. create a dummy bcp 
+    2. with all textual expressions: parse the expression and delete the resulting bcx
+          --> this will add all variables to bcp
+    3. make a call to bcp_UpdateFromBCX(p) so that the bcp matches the variable cnt from all the expressions
+    4. with all textual expressions: parse the expresion, get the BCL and delete the expression
+
+*/
 bcx bcp_Parse(bcp p, const char *s)
 {
+  bcx x;
+  // prepare the expression, so that we can start with the parsing
   const char **t = &s; 
   bcp_skip_space(p, t);    
-  return bcp_ParseOR(p, t);
+  // convert the given textual expression into an abstract syntax tree
+  x = bcp_ParseOR(p, t);
+  
+  // add all variables from the expression to problem record
+  if ( bcp_AddVarsFromBCX(p, x) == 0 )
+    return bcp_DeleteBCX(p, x), NULL;
+
+  // move any "not" to the leafs by applying de morgan law
+  // this will avoid calculation of complements inside bcl bcp_NewBCLByBCX(bcp p, bcx x)
+  // this call is optional
+  bcp_PropagateNotBCX(p, x);   
+  
+  // finally return the expresson tree
+  return x;
 }
 
 /*============================================================*/
@@ -417,6 +500,8 @@ void bcp_PrintBCX(bcp p, bcx x)
   bcp_PrintBCX(p, x->next);
 }
 
+/*============================================================*/
+
 bcl bcp_NewBCLById(bcp p, int is_not, const char *identifier)
 {
   bcl l;
@@ -435,7 +520,7 @@ bcl bcp_NewBCLById(bcp p, int is_not, const char *identifier)
       {
         assert( coIsDbl(var_pos_co) );
         var_pos = (int)coDblGet(var_pos_co);
-        assert( var_pos < p->var_cnt );
+        assert( var_pos < p->var_cnt ); // check whether bcp_UpdateFromBCX() was called
         bcp_SetCubeVar(p, bcp_GetBCLCube(p, l, cube_pos), var_pos, is_not?1:2);
         return l;
       }
@@ -448,7 +533,13 @@ bcl bcp_NewBCLById(bcp p, int is_not, const char *identifier)
 bcl bcp_NewBCLByBCX(bcp p, bcx x)
 {
   bcl l;
-  int is_not = x->is_not;
+  int is_not;
+
+  if ( x == NULL )
+    return bcp_NewBCL(p); // empty list
+  
+  is_not = x->is_not;
+  
   switch(x->type)
   {
     case BCX_TYPE_ID:

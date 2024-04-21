@@ -106,7 +106,7 @@ struct bcx_struct
 int bcp_GetVarCntFromString(const char *s);
 
 bcp bcp_New(size_t var_cnt);
-int bcp_UpdateFromX(bcp p);
+int bcp_UpdateFromBCX(bcp p);
 void bcp_Delete(bcp p);
 //bc bcp_GetGlobalCube(bcp p, int pos);
 #define bcp_GetGlobalCube(p, pos) \

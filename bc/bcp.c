@@ -94,7 +94,7 @@ bcp bcp_New(size_t var_cnt)
       p->var_list = NULL;
 
       p->x_end = '.';
-      p->x_not = '!';
+      p->x_not = '-';
       p->x_or = '|';
       p->x_and = '&';
       p->x_var_cnt = 0;
@@ -113,10 +113,10 @@ bcp bcp_New(size_t var_cnt)
   Update p->var_cnt from p->x_var_cnt after expression analysis
   Idea is this:
     1. allocate a bcp with dummy value 1
-    2. parse expression and update p->x_var_cnt
+    2. parse expression and update p->x_var_cnt with "bcp_Parse()"
     3. Call this function to change p->var_cnt to p->x_var_cnt
 */
-int bcp_UpdateFromX(bcp p)
+int bcp_UpdateFromBCX(bcp p)
 {
   assert( p->var_cnt <= 1 );
   bcp_var_cnt_clear(p);

@@ -168,17 +168,16 @@ int bc_ExecuteParse(const char *s)
   bcl l;
   bcp p = bcp_New(1);
   bcx x = bcp_Parse(p, s);
-  
-  
-  bcp_AddVarsFromBCX(p, x);
+    
   bcp_ShowBCX(p, x);
   puts("");
+  
   bcp_BuildVarList(p);
   
   coPrint(p->var_map); puts("");
   coPrint(p->var_list); puts("");
 
-  assert( bcp_UpdateFromX(p) != 0 );
+  bcp_UpdateFromBCX(p);
 
   l = bcp_NewBCLByBCX(p, x);
   assert( l != NULL );
