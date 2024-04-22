@@ -13,54 +13,63 @@
     }     
   ]
 
-  label/label0
-    Output the current flags. If label0 is used, then also output the content of slot0.
-    
-  cmd
-    A command as described below.
-    
-  bcl
-    A boolean cube list, which is used as an argument to "cmd".
-    
-  slot
-    Another argument for some of the "cmd"s below. Defaults to 0.
+  keys of the vector map:
+
+    label/label0
+      Output the current flags. If label0 is used, then also output the content of slot0.
+      
+    cmd
+      A command as described below.
+      
+    bcl
+      A boolean cube list, which is used as an argument to "cmd".
+      
+    expr
+      Expression, which is parsed and converted into a bcl
+      if both "bcl" and "expr" are present, then "bcl" is used and the expr is ignored
+      
+    slot
+      Another argument for some of the "cmd"s below. Defaults to 0.
 
   Note: slot always defaults to 0
 
-  bcl2slot
-    load the provided bcl into the given slot
-    { "cmd":"bcl2slot", "bcl":"110-", "slot":0 }
+  values for "cmd"
 
-  show
-    if bcl is present, then show bcl
-      { "cmd":"show", "slot":0 }
-    if slot is present, then show the slot content
-      { "cmd":"show", "bcl":"0011" }
+    bcl2slot
+      load the provided bcl into the given slot
+      { "cmd":"bcl2slot", "bcl":"110-", "slot":0 }
 
-  intersection0
-    Calculate intersection and store the result in slot 0
-    This operation will set the "empty" flag.
-    if bcl is present, then calculate intersection between slot 0 and bcl.
-      { "cmd":"intersection0", "bcl":"11-0" }
-    if slot is present, then calculate intersection between slot 0 and the provided slot
-      { "cmd":"intersection0", "slot":1 }
-  
-  subtract0
-    Subtract a bcl/slot from slot 0 and store the result in slot 0
-    This operation will set the "empty" flag.
-    if bcl is present, then calculate slot 0 minus bcl.
-      { "cmd":"subtract0", "bcl":"11-0" }
-    if slot is present, then calculate slot 0 minus the given slot.
-      { "cmd":"subtract0", "slot":1 }
-  
-  exchange0
-    Exchange slot 0 and the given other slot
-      { "cmd":"exchange0", "slot":1 }
-      
-  copy0
-    Copy slot 0 and the given other slot
-      { "cmd":"copy0", "slot":1 }
-  
+    show
+      if bcl is present, then show bcl
+        { "cmd":"show", "bcl":"0011" }
+      if slot is present, then show the slot content
+        { "cmd":"show", "slot":0 }
+
+    intersection0
+      Calculate intersection and store the result in slot 0
+      This operation will set the "empty" flag.
+      if bcl/expr is present, then calculate intersection between slot 0 and bcl/expr.
+        { "cmd":"intersection0", "bcl":"11-0" }
+      if slot is present, then calculate intersection between slot 0 and the provided slot
+        { "cmd":"intersection0", "slot":1 }
+    
+    subtract0
+      Subtract a bcl/slot from slot 0 and store the result in slot 0
+      This operation will set the "empty" flag.
+      if bcl/expr is present, then calculate slot 0 minus bcl/expr.
+        { "cmd":"subtract0", "bcl":"11-0" }
+      if slot is present, then calculate slot 0 minus the given slot.
+        { "cmd":"subtract0", "slot":1 }
+    
+    exchange0
+      Exchange slot 0 and the given other slot
+        { "cmd":"exchange0", "slot":1 }
+        
+    copy0
+      Copy slot 0 and the given other slot
+        { "cmd":"copy0", "slot":1 }
+
+
   
   store
     variable: store content of accu into variable var
@@ -103,6 +112,38 @@ int bc_ExecuteVector(cco in)
     slot_list[i] = NULL;
   
   assert( coIsVector(in) );
+
+  // PRE PHASE: Collect all variable names
+  for( i = 0; i < cnt; i++ )
+  {
+    cco cmdmap = coVectorGet(in, i);
+    if ( coIsMap(cmdmap) )
+    {
+      o = coMapGet(cmdmap, "expr");             // "expr" is an alternative way to describe a bcl
+      if (coIsStr(o))                     // only of the expr is a string and only of the bcl has not been assigned before
+      {
+        const char *expr_str = coStrGet(o);        
+        bcx x;
+        if ( p == NULL )
+        {
+          p = bcp_New(0);               // create a dummy bcp
+          assert( p != NULL );
+        }
+        x = bcp_Parse(p, expr_str, 0);              // no propagation required, we are just collecting the names
+        if ( x != NULL )
+            bcp_DeleteBCX(p, x);                      // free the expression tree
+      }
+    }
+  }
+  
+  if ( p != NULL )      // if a dummy bcp had been created, then convert that bcp to a regular bcp
+  {
+      bcp_UpdateFromBCX(p);
+  }
+
+  
+  // MAIN PHASE: Execute each element of the json array  
+  
   for( i = 0; i < cnt; i++ )
   {
     cco cmdmap = coVectorGet(in, i);
@@ -184,6 +225,19 @@ int bc_ExecuteVector(cco in)
           } // coIsStr
         } // for
       } // bcl is vector
+
+      o = coMapGet(cmdmap, "expr");             // "expr" is an alternative way to describe a bcl
+      if (coIsStr(o) && l == NULL )                     // only of the expr is a string and only of the bcl has not been assigned before
+      {
+        const char *expr_str = coStrGet(o);        
+        //printf("expr: %s\n", expr_str);
+        bcx x = bcp_Parse(p, expr_str, 1);              // assumption: p already contains all variables of expr_str
+        if ( x != NULL )
+        {
+            l = bcp_NewBCLByBCX(p, x);          // create a bcl from the expression tree 
+            bcp_DeleteBCX(p, x);                      // free the expression tree
+        }
+      }
 
       // STEP 2: Execute the command
       
@@ -272,9 +326,16 @@ int bc_ExecuteVector(cco in)
             coVectorAdd( v, coNewStr(CO_STRDUP, bcp_GetStringFromCube(p, bcp_GetBCLCube(p, slot_list[0], j))));
           }
           coMapAdd(e, "bcl", v);
+          if ( p->x_var_cnt == p->var_cnt )
+          {
+            coMapAdd(e, "expr", coNewStr(CO_STRFREE, bcp_GetExpressionBCL(p, slot_list[0])));
+          }
         }
         
         coMapAdd(output, label0 != NULL?label0:label, e);
+        
+ 
+        
       } // label
     } // isMap
     

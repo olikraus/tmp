@@ -64,10 +64,10 @@ struct bcp_struct
   int x_not;
   int x_and;
   int x_or;
-  int x_var_cnt;         // variable counter for expressions
+  int x_var_cnt;         // variable counter for expressions, should be equal to coMapSize(var_map)
   
-  co var_map;           // map with all variables 
-  co var_list;                  // vector with all variables
+  co var_map;           // map with all variables, key=name, value=position (double), p->x_var_cnt contains the number of variables in var_map
+  co var_list;                  // vector with all variables, derived from var_map
 };
 
 /* one cube, the number of __m128i is (var_cnt / 64) */
