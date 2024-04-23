@@ -17,6 +17,7 @@
 
     label/label0
       Output the current flags. If label0 is used, then also output the content of slot0.
+      Using the label member is the preffered way of generating output and results.
       
     cmd
       A command as described below.
@@ -40,10 +41,11 @@
       { "cmd":"bcl2slot", "bcl":"110-", "slot":0 }
 
     show
-      if bcl is present, then show bcl
+      if bcl/expr is present, then show bcl/expr
         { "cmd":"show", "bcl":"0011" }
       if slot is present, then show the slot content
         { "cmd":"show", "slot":0 }
+      This command is for debugging only, use label/label0 for proper output
 
     intersection0
       Calculate intersection and store the result in slot 0
@@ -54,13 +56,19 @@
         { "cmd":"intersection0", "slot":1 }
     
     subtract0
-      Subtract a bcl/slot from slot 0 and store the result in slot 0
+      Subtract a bcl/expr/slot from slot 0 and store the result in slot 0
       This operation will set the "empty" flag.
       if bcl/expr is present, then calculate slot 0 minus bcl/expr.
         { "cmd":"subtract0", "bcl":"11-0" }
       if slot is present, then calculate slot 0 minus the given slot.
         { "cmd":"subtract0", "slot":1 }
+
+    equal0
+      Compare a bcl/expr/slot with slot 0 and and set the superset and subset flags.
+      If both flags are set to 1, then the given bcl/slot is equal to slot 0
+      
     
+
     exchange0
       Exchange slot 0 and the given other slot
         { "cmd":"exchange0", "slot":1 }
@@ -69,14 +77,6 @@
       Copy slot 0 and the given other slot
         { "cmd":"copy0", "slot":1 }
 
-
-  
-  store
-    variable: store content of accu into variable var
-  minimize
-    minimize content of accu
-  
-  
 
 */
 
@@ -104,6 +104,8 @@ int bc_ExecuteVector(cco in)
   bcl arg;              // argument.. either l or a slot
   int result = 0;
   int is_empty = -1;
+  int is_0_superset = -1;
+  int is_0_subset = -1;
   co output = coNewMap(CO_STRDUP|CO_STRFREE|CO_FREE_VALS);
   
   assert( output != NULL );
@@ -284,6 +286,13 @@ int bc_ExecuteVector(cco in)
         if ( slot_list[0]->cnt == 0 )
           is_empty = 1;
       }
+      else if ( p != NULL &&  strcmp(cmd, "equal0") == 0 )
+      {
+        assert(slot_list[0] != NULL);
+        assert(arg != NULL);
+        is_0_superset = bcp_IsBCLSubset(p, slot_list[0], arg);       //   test, whether "arg" is a subset of "slot_list[0]": 1 if slot_list[0] is a superset of "arg"
+        is_0_subset = bcp_IsBCLSubset(p, arg, slot_list[0]);
+      }
       else if ( p != NULL &&  strcmp(cmd, "exchange0") == 0 )
       {
         bcl tmp;
@@ -316,6 +325,16 @@ int bc_ExecuteVector(cco in)
         {
           coMapAdd(e, "empty", coNewDbl(is_empty));          
         }
+
+        if ( is_0_superset >= 0 )
+        {
+          coMapAdd(e, "superset", coNewDbl(is_0_superset));          
+        }
+
+        if ( is_0_subset >= 0 )
+        {
+          coMapAdd(e, "subset", coNewDbl(is_0_subset));          
+        }
         
         if ( label0 != NULL && slot_list[0] != NULL )
         {
@@ -333,9 +352,6 @@ int bc_ExecuteVector(cco in)
         }
         
         coMapAdd(output, label0 != NULL?label0:label, e);
-        
- 
-        
       } // label
     } // isMap
     
